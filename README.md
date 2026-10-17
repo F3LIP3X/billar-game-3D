@@ -49,6 +49,14 @@ npm run dev
 
 - Sonidos de golpes, troneras, turno y aplausos: [Pool And Billiards SFX](https://papapleygames.itch.io/pool-and-billiards) de **Suraj Kispotta** (CC0). Recortados y pasados a mono en `public/sounds/`.
 
+## Multijugador online
+
+Botón **Jugar online** del menú: se crea una sala con un código de 5 letras (y un enlace `?sala=CÓDIGO`) y el rival se une desde su navegador. Las salas se guardan en Firebase Realtime Database; la sesión es anónima, no hace falta cuenta.
+
+- Cada jugador calcula la misma física (`src/physics.ts`, paso fijo `FIXED_DT`, determinista); quien tira envía solo ángulo, fuerza y efecto, y al acabar publica el estado oficial (posiciones, turno, grupos) al que se ajusta el otro.
+- `src/net.ts`: salas, presencia y mensajes. `database.rules.json`: quién puede escribir qué.
+- `npm run test:net` prueba el flujo con dos jugadores contra la base de datos real; `npm run deploy:rules` despliega las reglas.
+
 ## Publicar
 
 El juego está en Firebase Hosting (proyecto `billar-3d-f3lip3x`, sitio `billar3d`; la dirección antigua redirige a la nueva). Para publicar una versión nueva:

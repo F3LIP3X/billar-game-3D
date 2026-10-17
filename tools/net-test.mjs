@@ -2,11 +2,14 @@
 // crean una sala, juegan un par de turnos y se comprueba que las reglas rechazan lo que no deben.
 // Uso (desde la raíz del proyecto, con la base de datos creada y las reglas desplegadas):
 //   node tools/net-test.mjs
-import { cpSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 
 mkdirSync('.tmp-test', { recursive: true });
 for (const f of ['net', 'firebase-config']) {
-  const src = readFileSync(`src/${f}.ts`, 'utf8').replace(/from '\.\/firebase-config'/g, "from './firebase-config.ts'");
+  const src = readFileSync(`src/${f}.ts`, 'utf8')
+    .replace(/from '\.\/firebase-config'/g, "from './firebase-config.ts'")
+    // cada instancia del módulo = una app de Firebase propia = un usuario anónimo distinto (como dos navegadores)
+    .replace('initializeApp(firebaseConfig)', 'initializeApp(firebaseConfig, `jugador-${Math.random()}`)');
   writeFileSync(`.tmp-test/${f}.ts`, src);
 }
 const A = await import('../.tmp-test/net.ts?a'); // dos instancias del módulo = dos jugadores distintos
