@@ -2,6 +2,9 @@ import './style.css';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { Line2 } from 'three/addons/lines/Line2.js';
+import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
+import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { BALL_R, FOOT_SPOT, HEAD_SPOT, MAX_SHOT_SPEED, POCKETS, TABLE_L, TABLE_W } from './constants';
 import { castCueRay, isMoving, step, type Body } from './physics';
 import { buildRoom, buildTable } from './table';
@@ -73,22 +76,32 @@ const { setLampsOpacity } = buildRoom(scene);
 const cue = createCue();
 scene.add(cue);
 
-// Guía de tiro
-const guideMat = new THREE.LineDashedMaterial({ color: 0xffffff, dashSize: 0.02, gapSize: 0.015, transparent: true, opacity: 0.6 });
-const guide = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), guideMat);
-const objectGuide = new THREE.Line(
-  new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]),
-  guideMat.clone(),
-);
+// Guía de tiro: líneas gruesas (en píxeles) que se dibujan por encima de todo para que
+// ni las bandas ni las bolas las tapen al acercar la cámara
+function guideLine(color: number, opacity: number, width: number) {
+  const line = new Line2(
+    new LineGeometry().setPositions([0, 0, 0, 1, 0, 0]),
+    new LineMaterial({
+      color,
+      linewidth: width,
+      dashed: true,
+      dashSize: 0.025,
+      gapSize: 0.015,
+      transparent: true,
+      opacity,
+      depthTest: false,
+    }),
+  );
+  line.renderOrder = 10;
+  return line;
+}
+const guide = guideLine(0xffffff, 0.85, 2.5);
+const objectGuide = guideLine(0xffffff, 0.9, 2.5);
+const cueGuide = guideLine(0xffffff, 0.4, 2);
 const ghost = new THREE.Mesh(
   new THREE.SphereGeometry(BALL_R, 24, 16),
   new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.18, depthWrite: false }),
 );
-const cueGuide = new THREE.Line(
-  new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]),
-  guideMat.clone(),
-);
-(cueGuide.material as THREE.LineDashedMaterial).opacity = 0.3;
 scene.add(guide, objectGuide, cueGuide, ghost);
 
 // Línea de cabecera y zona de saque, visibles al colocar la blanca para el saque
@@ -181,7 +194,8 @@ const powerEl = document.querySelector<HTMLDivElement>('#power')!;
 const powerFill = document.querySelector<HTMLDivElement>('#power-fill')!;
 document.querySelector('#restart')!.addEventListener('click', () => {
   newGame();
-  setView('3d');
+  setView('3d', false);
+  cameraForPlacing();
 });
 document.querySelector('#to-menu')!.addEventListener('click', () => {
   newGame();
@@ -286,7 +300,7 @@ function announceTurn(text: string) {
   turnBanner.classList.add('show');
   clearTimeout(bannerTimer);
   bannerTimer = window.setTimeout(() => turnBanner.classList.remove('show'), 1600);
-  (guide.material as THREE.LineDashedMaterial).color.set(PLAYER_COLORS[current]);
+  guide.material.color.set(PLAYER_COLORS[current]);
 }
 
 function renderHud() {
@@ -394,14 +408,14 @@ canvas.addEventListener('pointerdown', (e) => {
     return;
   }
   if (state === 'aiming') startCharge();
-  else if (state === 'placing' && placementValid()) state = 'aiming';
+  else if (state === 'placing' && placementValid()) finishPlacing();
 });
 
 window.addEventListener('pointerup', (e) => {
   if (e.pointerType === 'touch') {
     const wasSingle = touches.size === 1 && touches.has(e.pointerId);
     touches.delete(e.pointerId);
-    if (wasSingle && state === 'placing' && placementValid()) state = 'aiming';
+    if (wasSingle && state === 'placing' && placementValid()) finishPlacing();
     return;
   }
   if (e.button === 0 && state === 'charging') shoot();
@@ -545,6 +559,29 @@ function moveCamera(toPos: THREE.Vector3, toTarget: THREE.Vector3, toFov: number
 }
 
 const tweenSph = new THREE.Spherical();
+/**
+ * Coloca la cámara junto a la blanca mirando hacia el centro de la mesa, a la altura de un
+ * jugador: la blanca queda en primer plano y la mesa por delante.
+ */
+function focusCueBall() {
+  const c = cueBall().body;
+  // Dirección horizontal de la blanca hacia el centro (si está casi en el centro, la de la cámara)
+  const toCenter = new THREE.Vector3(-c.x, 0, -c.z);
+  if (toCenter.length() < 0.15) toCenter.set(controls.target.x - camera.position.x, 0, controls.target.z - camera.position.z);
+  toCenter.normalize();
+  // El punto al que se mira está entre la blanca y el centro de la mesa
+  const lookDist = Math.min(0.5, Math.hypot(c.x, c.z));
+  const target = new THREE.Vector3(c.x + toCenter.x * lookDist, 0, c.z + toCenter.z * lookDist);
+  const radius = window.innerWidth <= 600 ? 2.4 : 1.9;
+  const elev = THREE.MathUtils.degToRad(35);
+  const pos = new THREE.Vector3(
+    target.x - toCenter.x * radius * Math.cos(elev),
+    radius * Math.sin(elev),
+    target.z - toCenter.z * radius * Math.cos(elev),
+  );
+  moveCamera(pos, target, BASE_FOV, true);
+}
+
 function updateCameraTween() {
   if (!camTween) return;
   const t = Math.min(1, (performance.now() - camTween.start) / 800);
@@ -599,7 +636,31 @@ function updateZoom(dt: number) {
 
 type View = '3d' | '2d' | 'cue';
 let view: View = '3d';
+/** Desde arriba; la mesa a lo largo de la pantalla según la orientación. */
+function topCamera(animate: boolean) {
+  const dir = camera.aspect >= 1 ? new THREE.Vector3(0, 1, 0.0001) : new THREE.Vector3(-0.0001, 1, 0);
+  moveCamera(fitPosition(dir, TOP_FOV), new THREE.Vector3(), TOP_FOV, animate);
+}
+
+// Con bola en mano la cámara pasa a vista cenital solo mientras se coloca la blanca
+let topForPlacing = false;
+function cameraForPlacing() {
+  if (view === '2d') return;
+  topForPlacing = true;
+  topCamera(true);
+}
+
+/** La blanca queda colocada: empieza a apuntar y la cámara vuelve a la vista elegida, junto a la blanca. */
+function finishPlacing() {
+  state = 'aiming';
+  if (!topForPlacing) return;
+  topForPlacing = false;
+  if (view === 'cue') setView('cue');
+  else focusCueBall();
+}
+
 function setView(v: View, animate = true) {
+  topForPlacing = false;
   view = v;
   document.querySelectorAll<HTMLButtonElement>('[data-view]').forEach((b) => b.classList.toggle('on', b.dataset.view === v));
   const origin = new THREE.Vector3(0, 0, 0);
@@ -609,9 +670,7 @@ function setView(v: View, animate = true) {
     const dir = new THREE.Vector3(-Math.cos(elev), Math.sin(elev), 0.0001);
     moveCamera(fitPosition(dir, BASE_FOV), origin, BASE_FOV, animate);
   } else if (v === '2d') {
-    // Desde arriba; la mesa a lo largo de la pantalla según la orientación
-    const dir = camera.aspect >= 1 ? new THREE.Vector3(0, 1, 0.0001) : new THREE.Vector3(-0.0001, 1, 0);
-    moveCamera(fitPosition(dir, TOP_FOV), origin, TOP_FOV, animate);
+    topCamera(animate);
   } else {
     const { pos, target } = chaseCamera();
     moveCamera(pos, target, BASE_FOV, animate);
@@ -681,6 +740,7 @@ function shoot() {
 }
 
 function endShot() {
+  stopPip();
   const result = evaluateShot(players, current, shot, onTableBefore, shotIsBreak);
   const cb = cueBall();
 
@@ -718,8 +778,10 @@ function endShot() {
   showMessage(result.message);
   renderHud();
   if (turnChanged) announceTurn(`Turno de ${players[current].name}`);
-  // La vista tras la bola se recoloca detrás de la blanca para el siguiente tiro
-  if (view === 'cue') setView('cue');
+  // La cámara va a la blanca para el siguiente tiro (o arriba si hay que colocarla)
+  if (state === 'placing') cameraForPlacing();
+  else if (view === 'cue') setView('cue');
+  else if (view === '3d') focusCueBall();
 }
 
 // ---------- Bucle ----------
@@ -783,13 +845,15 @@ function updateAimVisuals() {
   const gx = c.x + dx * distance;
   const gz = c.z + dz * distance;
   ghost.position.set(gx, BALL_R, gz);
-  setLine(guide, c.x, c.z, gx, gz);
+  setLine(guide, c.x + dx * BALL_R, c.z + dz * BALL_R, gx, gz);
 
   if (hit) {
     const nx = hit.x - gx;
     const nz = hit.z - gz;
     const len = Math.hypot(nx, nz) || 1;
-    setLine(objectGuide, hit.x, hit.z, hit.x + (nx / len) * 0.25, hit.z + (nz / len) * 0.25);
+    const ux = nx / len;
+    const uz = nz / len;
+    setLine(objectGuide, hit.x + ux * BALL_R, hit.z + uz * BALL_R, hit.x + ux * 0.4, hit.z + uz * 0.4);
     // La blanca sale por la tangente (sin efecto); más corta cuanto más de lleno es el golpe
     const along = dx * (nx / len) + dz * (nz / len);
     const tx = dx - along * (nx / len);
@@ -800,11 +864,8 @@ function updateAimVisuals() {
   }
 }
 
-function setLine(line: THREE.Line, x0: number, z0: number, x1: number, z1: number) {
-  const pos = line.geometry.attributes.position as THREE.BufferAttribute;
-  pos.setXYZ(0, x0, BALL_R, z0);
-  pos.setXYZ(1, x1, BALL_R, z1);
-  pos.needsUpdate = true;
+function setLine(line: Line2, x0: number, z0: number, x1: number, z1: number) {
+  line.geometry.setPositions([x0, BALL_R, z0, x1, BALL_R, z1]);
   line.computeLineDistances();
 }
 
@@ -840,6 +901,7 @@ function frame() {
     for (const hit of ev.ballHits) {
       if (shot.firstHit === null && (hit.a.id === 0 || hit.b.id === 0)) {
         shot.firstHit = hit.a.id === 0 ? hit.b.id : hit.a.id;
+        startPip(shot.firstHit);
       }
     }
     for (const s of ev.cushionHits) sounds.cushion(s);
@@ -861,6 +923,7 @@ function frame() {
   updateAimVisuals();
   updateCameraTween();
   updateZoom(dt);
+  followCueBall(dt);
   controls.update();
   // Que el desplazamiento no saque la mesa de la vista
   controls.target.x = THREE.MathUtils.clamp(controls.target.x, -1.6, 1.6);
@@ -873,7 +936,77 @@ function frame() {
   // Desde arriba las lámparas taparían la mesa
   setLampsOpacity(state === 'menu' ? 1 : 1 - THREE.MathUtils.smoothstep(camera.position.y, 1.0, 1.5));
   renderer.render(scene, camera);
+  renderPip(dt);
   requestAnimationFrame(frame);
+}
+
+/** Durante el tiro la cámara acompaña suavemente a la blanca (salvo en la vista 2D). */
+function followCueBall(dt: number) {
+  const c = cueBall().body;
+  if (state !== 'rolling' || view === '2d' || camTween || !c.active) return;
+  const k = 1 - Math.exp(-dt * 2.5);
+  const delta = new THREE.Vector3((c.x - controls.target.x) * k, 0, (c.z - controls.target.z) * k);
+  controls.target.add(delta);
+  camera.position.add(delta);
+}
+
+// ---------- Cámara de detalle (recuadro) ----------
+// Cuando la blanca golpea una bola, un recuadro la sigue de cerca hasta que se para o entra.
+const pipCam = new THREE.PerspectiveCamera(45, 16 / 10, 0.01, 20);
+const pipEl = document.querySelector<HTMLDivElement>('#pip')!;
+const pipLabel = document.querySelector<HTMLSpanElement>('#pip-label')!;
+let pipBall: Ball | null = null;
+let pipLinger = 0; // segundos que sigue visible tras pararse la bola
+const pipDir = new THREE.Vector3(1, 0, 0);
+const pipLook = new THREE.Vector3();
+
+function startPip(n: number) {
+  pipBall = balls[n];
+  pipLinger = 1.2;
+  pipLabel.textContent = `Bola ${n}`;
+  pipEl.style.setProperty('--c', ballColor(n));
+  pipEl.classList.add('on');
+  const b = pipBall.body;
+  const speed = Math.hypot(b.vx, b.vz);
+  if (speed > 0) pipDir.set(b.vx / speed, 0, b.vz / speed);
+  pipCam.position.set(b.x - pipDir.x * 0.45, 0.2, b.z - pipDir.z * 0.45);
+  pipLook.set(b.x, 0, b.z);
+}
+
+function stopPip() {
+  pipBall = null;
+  pipEl.classList.remove('on');
+}
+
+function renderPip(dt: number) {
+  if (!pipBall) return;
+  const b = pipBall.body;
+  const moving = b.active && (b.vx !== 0 || b.vz !== 0);
+  if (!moving && !pipBall.sinking) {
+    pipLinger -= dt;
+    if (pipLinger <= 0 || state !== 'rolling') return stopPip();
+  }
+  // Detrás de la bola según su dirección, con suavizado para que no dé tirones en los rebotes
+  const speed = Math.hypot(b.vx, b.vz);
+  if (speed > 0.05) pipDir.lerp(new THREE.Vector3(b.vx / speed, 0, b.vz / speed), 1 - Math.exp(-dt * 4)).normalize();
+  const m = pipBall.mesh.position;
+  const k = 1 - Math.exp(-dt * 6);
+  pipCam.position.lerp(new THREE.Vector3(m.x - pipDir.x * 0.45, 0.2, m.z - pipDir.z * 0.45), k);
+  pipLook.lerp(new THREE.Vector3(m.x + pipDir.x * 0.15, Math.max(m.y, 0), m.z + pipDir.z * 0.15), k);
+  pipCam.lookAt(pipLook);
+
+  const r = pipEl.getBoundingClientRect();
+  pipCam.aspect = r.width / r.height;
+  pipCam.updateProjectionMatrix();
+  const y = window.innerHeight - r.bottom; // WebGL cuenta desde abajo
+  renderer.setScissorTest(true);
+  renderer.setScissor(r.left, y, r.width, r.height);
+  renderer.setViewport(r.left, y, r.width, r.height);
+  renderer.shadowMap.autoUpdate = false; // las sombras ya están calculadas en este fotograma
+  renderer.render(scene, pipCam);
+  renderer.shadowMap.autoUpdate = true;
+  renderer.setScissorTest(false);
+  renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
 }
 
 function resize() {
@@ -898,6 +1031,7 @@ document.querySelector('#play')!.addEventListener('click', () => {
   newGame();
   resize();
   setView('3d', false);
+  cameraForPlacing();
   if (matchMedia('(pointer: coarse)').matches) showMessage('Toca la mesa para colocar la blanca · dos dedos mueven la cámara');
 });
 
