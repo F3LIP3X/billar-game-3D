@@ -827,7 +827,7 @@ helpBtn.addEventListener('click', () => {
 canvas.addEventListener('pointerdown', () => setHelp(false));
 window.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') setHelp(false);
-  if (e.key === '?') setHelp(!helpPop.classList.contains('open'));
+  if (e.key === '?' && !(e.target instanceof HTMLInputElement)) setHelp(!helpPop.classList.contains('open'));
 });
 
 const muteBtn = document.querySelector<HTMLButtonElement>('#mute')!;
@@ -844,7 +844,7 @@ function toggleMute() {
 }
 muteBtn.addEventListener('click', toggleMute);
 window.addEventListener('keydown', (e) => {
-  if (e.key === 'm' || e.key === 'M') toggleMute();
+  if ((e.key === 'm' || e.key === 'M') && !(e.target instanceof HTMLInputElement)) toggleMute();
 });
 renderMute();
 
