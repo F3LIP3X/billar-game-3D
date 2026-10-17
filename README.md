@@ -42,3 +42,7 @@ npm run dev
 - `src/balls.ts` — bolas (texturas generadas en canvas) y taco
 - `src/audio.ts` — sonidos sintetizados con WebAudio (choques, bandas, troneras, rodadura, turnos); M para silenciar
 - `src/main.ts` — escena, entrada y bucle de juego
+
+## Créditos
+
+- Sonidos de golpes, troneras, turno y aplausos: [Pool And Billiards SFX](https://papapleygames.itch.io/pool-and-billiards) de **Suraj Kispotta** (CC0). Recortados y pasados a mono en `public/sounds/`.

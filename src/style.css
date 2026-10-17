@@ -372,6 +372,7 @@ html, body {
 }
 #spin {
   pointer-events: auto;
+  flex: none;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -474,8 +475,10 @@ body.free-cam #scene:active { cursor: grabbing; }
 /* ---------- Sonido ---------- */
 #mute {
   pointer-events: auto;
+  flex: none; /* que la fila no lo estreche y deje de ser un círculo */
   width: 44px;
   height: 44px;
+  padding: 0;
   border-radius: 50%;
   display: grid;
   place-items: center;

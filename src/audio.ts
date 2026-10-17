@@ -1,10 +1,8 @@
-// Sonidos sintetizados con WebAudio: sin ficheros que cargar.
-// Los golpes se hacen con ráfagas de ruido filtrado (suenan a "clac" y no a pitido)
-// y en bandas medias, que se oyen bien también en altavoces de portátil o móvil.
+// Sonidos del juego. Los golpes son grabaciones reales (paquete "Pool And Billiards SFX"
+// de Suraj Kispotta, CC0) y el rumor de rodadura se sintetiza con ruido filtrado.
 
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
-let noise: AudioBuffer | null = null;
 let rolling: GainNode | null = null;
 let muted = (() => {
   try {
@@ -14,28 +12,61 @@ let muted = (() => {
   }
 })();
 
+const SAMPLE_FILES = {
+  ball: ['ball1', 'ball2', 'ball3', 'ball4', 'ball5', 'ball6'],
+  cushion: ['cushion1', 'cushion2', 'cushion3'],
+  cue: ['cue1', 'cue2', 'cue3', 'cue4'],
+  pocket: ['pocket'],
+  pocketRoll: ['pocket-roll'],
+  turn: ['turn'],
+  click: ['click'],
+  applause: ['applause'],
+};
+type SampleName = keyof typeof SAMPLE_FILES;
+const samples: Partial<Record<SampleName, AudioBuffer[]>> = {};
+
+async function loadSamples(context: AudioContext) {
+  const base = `${import.meta.env.BASE_URL}sounds/`;
+  await Promise.all(
+    (Object.keys(SAMPLE_FILES) as SampleName[]).map(async (name) => {
+      const buffers = await Promise.all(
+        SAMPLE_FILES[name].map(async (file) => {
+          const res = await fetch(`${base}${file}.wav`);
+          return context.decodeAudioData(await res.arrayBuffer());
+        }),
+      );
+      samples[name] = buffers;
+    }),
+  );
+}
+
 export function unlockAudio() {
   if (!ctx) {
     ctx = new AudioContext();
     master = ctx.createGain();
-    master.gain.value = muted ? 0 : 0.9;
+    master.gain.value = muted ? 0 : 1;
     master.connect(ctx.destination);
+    loadSamples(ctx).catch(() => {
+      /* sin sonidos si fallan las descargas: el juego sigue */
+    });
 
-    noise = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+    // Rumor de las bolas rodando sobre el paño: ruido grave filtrado que sigue a la velocidad
+    const noise = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
     const data = noise.getChannelData(0);
-    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
-
-    // Rumor de las bolas rodando: ruido continuo filtrado cuyo volumen sigue a la velocidad
+    let last = 0;
+    for (let i = 0; i < data.length; i++) {
+      last = last * 0.97 + (Math.random() * 2 - 1) * 0.03; // ruido "marrón": más grave y suave
+      data[i] = last * 6;
+    }
     const src = ctx.createBufferSource();
     src.buffer = noise;
     src.loop = true;
-    const band = ctx.createBiquadFilter();
-    band.type = 'bandpass';
-    band.frequency.value = 420;
-    band.Q.value = 0.9;
+    const lowpass = ctx.createBiquadFilter();
+    lowpass.type = 'lowpass';
+    lowpass.frequency.value = 600;
     rolling = ctx.createGain();
     rolling.gain.value = 0;
-    src.connect(band).connect(rolling).connect(master);
+    src.connect(lowpass).connect(rolling).connect(master);
     src.start();
   }
   if (ctx.state === 'suspended') void ctx.resume();
@@ -52,36 +83,32 @@ export function setMuted(value: boolean) {
   } catch {
     /* sin almacenamiento: solo dura esta sesión */
   }
-  if (ctx && master) master.gain.setTargetAtTime(value ? 0 : 0.9, ctx.currentTime, 0.02);
+  if (ctx && master) master.gain.setTargetAtTime(value ? 0 : 1, ctx.currentTime, 0.02);
 }
 
-function noiseBurst(type: BiquadFilterType, freq: number, q: number, dur: number, gain: number, delay = 0) {
-  if (!ctx || !master || !noise || gain < 0.005) return;
-  const t = ctx.currentTime + delay;
+/** Reproduce una variante al azar con un poco de variación de tono para que no suene repetido. */
+function play(name: SampleName, volume: number, { pitch = 0.06, delay = 0 } = {}) {
+  const list = samples[name];
+  if (!ctx || !master || !list?.length || volume < 0.01) return;
   const src = ctx.createBufferSource();
-  src.buffer = noise;
-  const filter = ctx.createBiquadFilter();
-  filter.type = type;
-  filter.frequency.value = freq;
-  filter.Q.value = q;
+  src.buffer = list[Math.floor(Math.random() * list.length)];
+  src.playbackRate.value = 1 + (Math.random() * 2 - 1) * pitch;
   const g = ctx.createGain();
-  g.gain.setValueAtTime(Math.min(gain, 1), t);
-  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-  src.connect(filter).connect(g).connect(master);
-  src.start(t, Math.random() * 0.5);
-  src.stop(t + dur + 0.02);
+  g.gain.value = Math.min(volume, 1.5);
+  src.connect(g).connect(master);
+  src.start(ctx.currentTime + delay);
 }
 
-function toneBurst(freq: number, dur: number, gain: number, type: OscillatorType = 'sine', delay = 0, endFreq = freq) {
-  if (!ctx || !master || gain < 0.005) return;
+function tone(freq: number, dur: number, gain: number, delay = 0, endFreq = freq) {
+  if (!ctx || !master) return;
   const t = ctx.currentTime + delay;
   const osc = ctx.createOscillator();
   const g = ctx.createGain();
-  osc.type = type;
+  osc.type = 'triangle';
   osc.frequency.setValueAtTime(freq, t);
-  if (endFreq !== freq) osc.frequency.exponentialRampToValueAtTime(endFreq, t + dur);
+  osc.frequency.exponentialRampToValueAtTime(endFreq, t + dur);
   g.gain.setValueAtTime(0.0001, t);
-  g.gain.exponentialRampToValueAtTime(Math.min(gain, 1), t + 0.004);
+  g.gain.exponentialRampToValueAtTime(gain, t + 0.01);
   g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
   osc.connect(g).connect(master);
   osc.start(t);
@@ -89,53 +116,29 @@ function toneBurst(freq: number, dur: number, gain: number, type: OscillatorType
 }
 
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
+// El oído percibe el volumen de forma logarítmica: curva para que los golpes suaves se oigan
+const loudness = (v: number) => Math.pow(clamp(v, 0, 1), 0.6);
 
 export const sounds = {
-  /** Choque entre bolas: "clac" seco y agudo. */
-  ball(speed: number) {
-    const v = clamp(speed / 2.5, 0.06, 1);
-    noiseBurst('bandpass', 3200 + Math.random() * 600, 1.4, 0.04, v * 1.1);
-    toneBurst(1750 + Math.random() * 350, 0.045, v * 0.35, 'triangle');
-  },
-  /** Banda: golpe sordo de goma. */
-  cushion(speed: number) {
-    const v = clamp(speed / 3, 0.05, 1);
-    noiseBurst('lowpass', 900, 0.8, 0.1, v * 0.9);
-    toneBurst(320, 0.09, v * 0.35, 'triangle', 0, 210);
-  },
-  /** Golpe del taco: chasquido de la suela contra la bola. */
-  cue(power: number) {
-    noiseBurst('highpass', 1400, 0.7, 0.035, 0.35 + power * 0.55);
-    toneBurst(1050, 0.05, 0.25 + power * 0.2, 'triangle', 0, 800);
-  },
-  /** Tronera: la bola golpea el borde un par de veces y cae. */
+  ball: (speed: number) => play('ball', loudness(speed / 3) * 1.1),
+  cushion: (speed: number) => play('cushion', loudness(speed / 3.5) * 0.9),
+  cue: (power: number) => play('cue', 0.35 + power * 0.8, { pitch: 0.03 }),
   pocket() {
-    [0, 0.055, 0.12].forEach((d, i) => noiseBurst('bandpass', 900 - i * 150, 2.5, 0.06, 0.7 - i * 0.18, d));
-    noiseBurst('lowpass', 500, 0.7, 0.22, 0.6, 0.2);
-    toneBurst(190, 0.22, 0.35, 'sine', 0.2, 120);
+    play('pocket', 0.9, { pitch: 0.04 });
+    play('pocketRoll', 0.45, { pitch: 0.04, delay: 0.18 });
   },
-  /** Cambio de turno: dos notas suaves. */
-  turn() {
-    toneBurst(660, 0.25, 0.13, 'sine');
-    toneBurst(880, 0.35, 0.13, 'sine', 0.11);
-  },
-  /** Falta: dos notas graves descendentes. */
+  turn: () => play('turn', 0.5, { pitch: 0 }),
+  /** Falta: dos notas graves descendentes, discretas. */
   foul() {
-    toneBurst(330, 0.22, 0.16, 'triangle', 0, 300);
-    toneBurst(247, 0.32, 0.16, 'triangle', 0.16, 220);
+    tone(330, 0.22, 0.12, 0, 300);
+    tone(247, 0.32, 0.12, 0.16, 220);
   },
-  /** Clic de botón. */
-  ui() {
-    toneBurst(1300, 0.04, 0.08, 'sine');
-  },
-  /** Victoria: arpegio ascendente (do-mi-sol-do). */
-  win() {
-    [523, 659, 784, 1047].forEach((f, i) => toneBurst(f, 0.6, 0.18, 'triangle', i * 0.11));
-  },
+  ui: () => play('click', 0.4, { pitch: 0 }),
+  win: () => play('applause', 0.8, { pitch: 0 }),
 };
 
 /** Volumen del rumor de rodadura según la velocidad total de las bolas (m/s). */
 export function setRolling(totalSpeed: number) {
   if (!ctx || !rolling) return;
-  rolling.gain.setTargetAtTime(Math.min(0.22, totalSpeed * 0.05), ctx.currentTime, 0.08);
+  rolling.gain.setTargetAtTime(Math.min(0.35, totalSpeed * 0.08), ctx.currentTime, 0.1);
 }
