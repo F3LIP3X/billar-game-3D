@@ -986,10 +986,23 @@ function frame() {
   fog.near = camDist + 1.5;
   fog.far = camDist + 8;
   // Desde arriba las lámparas taparían la mesa
-  setLampsOpacity(state === 'menu' ? 1 : 1 - THREE.MathUtils.smoothstep(camera.position.y, 1.0, 1.5));
+  setLampsOpacity(state === 'menu' ? 1 : lampsOpacity());
   renderer.render(scene, camera);
   renderPip(dt);
   requestAnimationFrame(frame);
+}
+
+/**
+ * Las lámparas se desvanecen si taparían la mesa (cámara por encima de ellas) o si la cámara
+ * se acerca demasiado (para no meterse dentro). La lámpara es una barra a 1,28 m de x = -0,95 a 0,95.
+ */
+function lampsOpacity() {
+  const p = camera.position;
+  const above = 1 - THREE.MathUtils.smoothstep(p.y, 1.0, 1.5);
+  const dx = Math.max(0, Math.abs(p.x) - 0.95);
+  const distToLamps = Math.hypot(dx, p.y - 1.28, p.z);
+  const near = THREE.MathUtils.smoothstep(distToLamps, 0.35, 0.9);
+  return Math.min(above, near);
 }
 
 /** Durante el tiro la cámara acompaña suavemente a la blanca (salvo en la vista 2D). */
