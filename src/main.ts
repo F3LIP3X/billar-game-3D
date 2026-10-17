@@ -7,10 +7,11 @@ import { Line2 } from 'three/addons/lines/Line2.js';
 import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { BALL_R, FOOT_SPOT, HEAD_SPOT, MAX_SHOT_SPEED, POCKETS, TABLE_L, TABLE_W } from './constants';
-import { castCueRay, isMoving, step, type Body } from './physics';
+import { castCueRay, FIXED_DT, isMoving, step, type Body } from './physics';
+import type { AimMsg, Net, NetEvents, ShotMsg, StateMsg } from './net';
 import { buildRoom, buildTable } from './table';
 import { ballColor, createBallMesh, createBlobShadow, createCue } from './balls';
-import { evaluateShot, groupOf, type Player, type ShotRecord } from './rules';
+import { evaluateShot, groupOf, type Group, type Player, type ShotRecord } from './rules';
 import { isMuted, setMuted, sounds, unlockAudio } from './audio';
 import { low, quality, rememberLowQuality, touch } from './quality';
 
@@ -177,6 +178,32 @@ let gameStart = 0;
 const cueBall = () => balls[0];
 const onTable = () => balls.filter((b) => b.body.active && b.n !== 0).map((b) => b.n);
 
+// ---------- Multijugador online ----------
+// Cada jugador calcula la misma física a partir del mismo tiro (paso fijo, determinista) y quien
+// ha tirado publica al acabar el estado oficial, al que todos se ajustan.
+let net: Net | null = null;
+let mySeat = 0;
+let gameId = 0; // partida actual: sube con cada revancha
+let stateSeq = 0; // último estado oficial aplicado o publicado
+let shotCounter = 0;
+let aimCounter = 0;
+let lastRemoteShot = 0;
+let remoteShot = false; // el tiro en curso es del rival
+let remoteDone = false; // ...y mi simulación ya ha terminado
+let pendingState: StateMsg | null = null;
+let remoteAim: AimMsg | null = null;
+let lastAimSent = '';
+let onlineNames: [string, string] = ['', ''];
+let gameStarted = false;
+let hasState = false;
+let simAcc = 0; // tiempo de simulación pendiente (paso fijo)
+const q6 = (v: number) => Math.round(v * 1e6) / 1e6; // así los dos lados usan exactamente los mismos números
+const seatStr = () => String(mySeat) as '0' | '1';
+/** ¿Puede este jugador interactuar ahora? En local siempre; online solo en su turno. */
+const canAct = () => !net || (current === mySeat && state !== 'rolling' && state !== 'over' && state !== 'menu' && !remoteShot);
+const turnText = () =>
+  net && current === mySeat ? 'Tu turno' : `Turno de ${players[current].name}`;
+
 function newGame() {
   for (const b of balls) {
     scene.remove(b.mesh);
@@ -200,10 +227,7 @@ function newGame() {
     }
   }
 
-  players = [
-    { name: 'Jugador 1', group: null },
-    { name: 'Jugador 2', group: null },
-  ];
+  players = [0, 1].map((i) => ({ name: onlineNames[i] || `Jugador ${i + 1}`, group: null }));
   current = 0;
   aimAngle = 0;
   stats = [0, 1].map(() => ({ shots: 0, potted: 0, fouls: 0 }));
@@ -217,7 +241,7 @@ function newGame() {
   syncMeshes(0);
   renderHud();
   showMessage('Coloca la blanca detrás de la línea');
-  announceTurn('Saque de Jugador 1');
+  announceTurn(net && mySeat === 0 ? 'Tu saque' : `Saque de ${players[0].name}`);
 }
 
 // ---------- HUD ----------
@@ -225,12 +249,27 @@ const overlay = document.querySelector<HTMLDivElement>('#overlay')!;
 const messageEl = document.querySelector<HTMLDivElement>('#message')!;
 const powerEl = document.querySelector<HTMLDivElement>('#power')!;
 const powerFill = document.querySelector<HTMLDivElement>('#power-fill')!;
-document.querySelector('#restart')!.addEventListener('click', () => {
+const restartBtn = document.querySelector<HTMLButtonElement>('#restart')!;
+function resetRematchButton() {
+  restartBtn.textContent = 'Revancha';
+  restartBtn.disabled = false;
+}
+restartBtn.addEventListener('click', () => {
+  if (net) {
+    // Online: la revancha empieza cuando los dos la piden
+    net.setRematch(true);
+    restartBtn.disabled = true;
+    restartBtn.textContent = 'Esperando al rival…';
+    return;
+  }
   newGame();
   setView(startView, false);
   cameraForPlacing();
 });
-document.querySelector('#to-menu')!.addEventListener('click', () => {
+document.querySelector('#to-menu')!.addEventListener('click', () => goToMenu());
+
+function goToMenu() {
+  if (net) void leaveOnline();
   newGame();
   state = 'menu';
   hud.hidden = true;
@@ -239,7 +278,7 @@ document.querySelector('#to-menu')!.addEventListener('click', () => {
   controls.autoRotate = true;
   applyMenuOffset();
   moveCamera(new THREE.Vector3(-2.6, 1.9, 1.8), new THREE.Vector3(0, 0, 0), BASE_FOV, true);
-});
+}
 
 function showVictory(winner: number, shooterWon: boolean, foul: boolean) {
   const loser = 1 - winner;
@@ -343,6 +382,8 @@ function renderHud() {
     const i = Number(el.dataset.player);
     const p = players[i];
     el.classList.toggle('active', i === current);
+    el.querySelector('.name')!.textContent = p.name + (net && i === mySeat ? ' (tú)' : '');
+    el.querySelector('.turn-tag')!.textContent = net && i === mySeat ? 'Tu turno' : 'Su turno';
     const left = p.group ? tableBalls.filter((n) => groupOf(n) === p.group).length : 0;
     const groupEl = el.querySelector<HTMLElement>('.group')!;
     groupEl.textContent = !p.group
@@ -388,6 +429,7 @@ let lastAimPoint: THREE.Vector3 | null = null;
 const wrapAngle = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
 
 function aimOrPlace(e: PointerEvent, relative: boolean) {
+  if (!canAct()) return;
   const p = pointerOnTable(e);
   if (!p) return;
   const c = cueBall().body;
@@ -438,6 +480,7 @@ canvas.addEventListener('pointermove', (e) => {
 canvas.addEventListener('pointerdown', (e) => {
   if (e.button !== 0 || freeCam) return;
   unlockAudio();
+  if (!canAct()) return;
   if (e.pointerType === 'touch') {
     touches.add(e.pointerId);
     if (touches.size === 1) aimOrPlace(e, false);
@@ -451,7 +494,7 @@ window.addEventListener('pointerup', (e) => {
   if (e.pointerType === 'touch') {
     const wasSingle = touches.size === 1 && touches.has(e.pointerId);
     touches.delete(e.pointerId);
-    if (wasSingle && state === 'placing' && placementValid()) finishPlacing();
+    if (wasSingle && canAct() && state === 'placing' && placementValid()) finishPlacing();
     return;
   }
   if (e.button === 0 && state === 'charging') shoot();
@@ -459,6 +502,7 @@ window.addEventListener('pointerup', (e) => {
 window.addEventListener('pointercancel', (e) => touches.delete(e.pointerId));
 
 function startCharge() {
+  if (!canAct()) return;
   state = 'charging';
   chargeStart = performance.now();
 }
@@ -476,7 +520,7 @@ shootBtn.addEventListener('contextmenu', (e) => e.preventDefault());
 
 document.querySelectorAll<HTMLButtonElement>('[data-fine]').forEach((btn) =>
   btn.addEventListener('click', () => {
-    if (state === 'aiming') aimAngle += Number(btn.dataset.fine) * 0.003;
+    if (state === 'aiming' && canAct()) aimAngle += Number(btn.dataset.fine) * 0.003;
   }),
 );
 
@@ -501,13 +545,14 @@ document.querySelector('#spin')!.addEventListener('click', (e) => {
 });
 
 window.addEventListener('keydown', (e) => {
-  if (state === 'aiming') {
+  if (e.target instanceof HTMLInputElement) return; // escribiendo el nombre o el código
+  if (state === 'aiming' && canAct()) {
     const delta = e.shiftKey ? 0.0008 : 0.004;
     if (e.key === 'ArrowLeft') aimAngle -= delta;
     if (e.key === 'ArrowRight') aimAngle += delta;
   }
-  if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') setSpin(spin + 0.25);
-  if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') setSpin(spin - 0.25);
+  if (canAct() && (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W')) setSpin(spin + 0.25);
+  if (canAct() && (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S')) setSpin(spin - 0.25);
   if (state !== 'menu') {
     if (e.key === 'v' || e.key === 'V') setView('cue');
     if (e.key === '1') setView('3d');
@@ -810,15 +855,16 @@ function placementValid() {
   );
 }
 
-function shoot() {
+/** Arranca la simulación de un tiro. Lo usan el tiro propio y el del rival (online) con los mismos datos. */
+function launchShot(m: { vx: number; vz: number; rx: number; rz: number; cx: number; cz: number; power: number }) {
   const c = cueBall().body;
-  const speed = 0.25 + power * (MAX_SHOT_SPEED - 0.25);
-  c.vx = Math.cos(aimAngle) * speed;
-  c.vz = Math.sin(aimAngle) * speed;
-  // Golpe a una altura h (en radios) sobre el centro: giro = 5·h/2 · velocidad
-  c.rx = c.vx * 2.5 * spin;
-  c.rz = c.vz * 2.5 * spin;
-  sounds.cue(power);
+  c.x = m.cx;
+  c.z = m.cz;
+  c.vx = m.vx;
+  c.vz = m.vz;
+  c.rx = m.rx;
+  c.rz = m.rz;
+  sounds.cue(m.power);
   stats[current].shots++;
   shot = { firstHit: null, potted: [] };
   onTableBefore = onTable();
@@ -826,10 +872,129 @@ function shoot() {
   isBreak = false;
   state = 'rolling';
   power = 0;
+  simAcc = 0;
+  remoteAim = null;
+}
+
+function shoot() {
+  if (!canAct()) return;
+  const c = cueBall().body;
+  const speed = 0.25 + power * (MAX_SHOT_SPEED - 0.25);
+  const vx = q6(Math.cos(aimAngle) * speed);
+  const vz = q6(Math.sin(aimAngle) * speed);
+  // Golpe a una altura h (en radios) sobre el centro: giro = 5·h/2 · velocidad
+  const m: ShotMsg = {
+    seq: ++shotCounter,
+    stateSeq,
+    by: seatStr(),
+    vx,
+    vz,
+    rx: q6(vx * 2.5 * spin),
+    rz: q6(vz * 2.5 * spin),
+    cx: q6(c.x),
+    cz: q6(c.z),
+    power: q6(power),
+  };
+  remoteShot = false;
+  launchShot(m);
+  net?.sendShot(m);
+}
+
+/** Estado oficial a partir del estado local. Las posiciones se redondean (y se aplican aquí también) para que todos tengan los mismos números. */
+function buildState(winner: number, shooterWon: boolean, foul: boolean, message: string): StateMsg {
+  const flat: number[] = [];
+  for (let n = 0; n < 16; n++) {
+    const b = balls[n].body;
+    b.x = q6(b.x);
+    b.z = q6(b.z);
+    flat.push(b.x, b.z, b.active ? 1 : 0);
+  }
+  return {
+    seq: ++stateSeq,
+    gameId,
+    turn: String(current) as '0' | '1',
+    phase: state === 'over' ? 'over' : state === 'placing' ? 'placing' : 'aiming',
+    isBreak,
+    kitchenOnly,
+    groups: players.map((p) => p.group ?? ''),
+    balls: flat,
+    stats: stats.flatMap((st) => [st.shots, st.potted, st.fouls]),
+    winner,
+    shooterWon,
+    foul,
+    message,
+  };
+}
+
+function publishState(winner: number, shooterWon: boolean, foul: boolean, message: string) {
+  if (net) net.sendState(buildState(winner, shooterWon, foul, message));
+}
+
+/** Aplica el estado oficial publicado por el otro jugador. */
+function applyState(m: StateMsg) {
+  const prevTurn = current;
+  if (m.gameId !== gameId) {
+    gameId = m.gameId; // partida nueva (o primera): se recoloca todo desde cero
+    newGame();
+    net?.setRematch(false);
+    resetRematchButton();
+    setView(startView, false);
+  }
+  stateSeq = m.seq;
+  hasState = true;
+  players[0].group = m.groups[0] ? (m.groups[0] as Group) : null;
+  players[1].group = m.groups[1] ? (m.groups[1] as Group) : null;
+  current = Number(m.turn);
+  isBreak = m.isBreak;
+  kitchenOnly = m.kitchenOnly;
+  for (let n = 0; n < 16; n++) {
+    const ball = balls[n];
+    const b = ball.body;
+    b.x = m.balls[n * 3];
+    b.z = m.balls[n * 3 + 1];
+    b.vx = b.vz = b.rx = b.rz = 0;
+    b.active = m.balls[n * 3 + 2] === 1;
+    ball.sinking = null;
+    ball.mesh.visible = b.active;
+    ball.mesh.position.set(b.x, BALL_R, b.z);
+  }
+  stats = [0, 1].map((i) => ({ shots: m.stats[i * 3], potted: m.stats[i * 3 + 1], fouls: m.stats[i * 3 + 2] }));
+  state = m.phase;
+  remoteShot = false;
+  remoteDone = false;
+  pendingState = null;
+  remoteAim = null;
+  power = 0;
+  if (m.phase === 'over') {
+    renderHud();
+    showVictory(m.winner, m.shooterWon, m.foul);
+    return;
+  }
+  renderHud();
+  if (m.message) showMessage(m.message);
+  const turnChanged = current !== prevTurn;
+  if (m.foul) sounds.foul();
+  else if (turnChanged) sounds.turn();
+  if (turnChanged) announceTurn(turnText());
+  afterTurnCamera();
+}
+
+/** La cámara va a la blanca para el siguiente tiro (o arriba si hay que colocarla). */
+function afterTurnCamera() {
+  if (state === 'placing') cameraForPlacing();
+  else if (view === 'cue') setView('cue');
+  else if (view === '3d') focusCueBall();
+  else if (touch) setView('2d'); // recentra y deshace el zoom del turno anterior
 }
 
 function endShot() {
   stopPip();
+  if (remoteShot) {
+    // Tiro del rival: no se evalúa nada aquí, se espera a su estado oficial
+    remoteDone = true;
+    if (pendingState) applyState(pendingState);
+    return;
+  }
   const result = evaluateShot(players, current, shot, onTableBefore, shotIsBreak);
   const cb = cueBall();
 
@@ -841,6 +1006,7 @@ function endShot() {
     state = 'over';
     renderHud();
     showVictory(result.winner, result.winner === current, result.foul);
+    publishState(result.winner, result.winner === current, result.foul, result.message);
     return;
   }
 
@@ -866,12 +1032,9 @@ function endShot() {
   }
   showMessage(result.message);
   renderHud();
-  if (turnChanged) announceTurn(`Turno de ${players[current].name}`);
-  // La cámara va a la blanca para el siguiente tiro (o arriba si hay que colocarla)
-  if (state === 'placing') cameraForPlacing();
-  else if (view === 'cue') setView('cue');
-  else if (view === '3d') focusCueBall();
-  else if (touch) setView('2d'); // recentra y deshace el zoom del turno anterior
+  if (turnChanged) announceTurn(turnText());
+  afterTurnCamera();
+  publishState(-1, false, result.foul, result.message);
 }
 
 // ---------- Bucle ----------
@@ -914,9 +1077,15 @@ function updateAimVisuals() {
   guide.visible = objectGuide.visible = cueGuide.visible = aiming;
   ghost.visible = aiming || state === 'placing';
   powerEl.classList.toggle('visible', state === 'charging');
-  shootBtn.disabled = !aiming;
+  shootBtn.disabled = !aiming || !canAct();
   kitchen.visible = state === 'placing' && kitchenOnly;
-  shootBtn.textContent = state === 'placing' ? 'Arrastra la blanca' : state === 'charging' ? 'Suelta para tirar' : 'Mantén para tirar';
+  shootBtn.textContent = net && !canAct() && state !== 'rolling'
+    ? `Turno de ${players[current].name}`
+    : state === 'placing'
+      ? 'Arrastra la blanca'
+      : state === 'charging'
+        ? 'Suelta para tirar'
+        : 'Mantén para tirar';
 
   if (state === 'placing') {
     ghost.position.set(c.x, BALL_R, c.z);
@@ -1042,6 +1211,59 @@ function countFps() {
   }
 }
 
+/** Sonidos, primera bola tocada y bolas metidas de un paso de simulación. */
+function handleSimEvents(ev: ReturnType<typeof step>) {
+  // En el saque hay muchos choques a la vez: solo suenan los más fuertes
+  [...ev.ballHits].sort((a, b) => b.speed - a.speed).slice(0, 5).forEach((h) => sounds.ball(h.speed));
+  for (const hit of ev.ballHits) {
+    if (shot.firstHit === null && (hit.a.id === 0 || hit.b.id === 0)) {
+      shot.firstHit = hit.a.id === 0 ? hit.b.id : hit.a.id;
+      startPip(shot.firstHit);
+    }
+  }
+  for (const s of ev.cushionHits) sounds.cushion(s);
+  for (const body of ev.potted) {
+    sounds.pocket();
+    shot.potted.push(body.id);
+    const pocket = nearestPocket(body.x, body.z);
+    balls[body.id].sinking = { x: pocket.x, z: pocket.z };
+  }
+  if (ev.potted.length) renderHud();
+}
+
+/** El rival apunta: se muestra su taco (suavizado) y, si coloca la blanca, el fantasma. */
+function updateRemoteAim(dt: number) {
+  if (!net || canAct() || !remoteAim || (state !== 'aiming' && state !== 'placing')) return;
+  const m = remoteAim;
+  const k = 1 - Math.exp(-dt * 14);
+  aimAngle += wrapAngle(m.angle - aimAngle) * k;
+  power = m.power;
+  if (spin !== m.spin) setSpin(m.spin);
+  const c = cueBall().body;
+  if (state === 'placing') {
+    c.x += (m.cx - c.x) * k;
+    c.z += (m.cz - c.z) * k;
+    if (!m.placing) state = 'aiming'; // ya ha confirmado la posición
+  }
+}
+
+/** Envía mi apuntado al rival, solo cuando cambia. */
+function sendLocalAim() {
+  if (!net || !canAct() || (state !== 'aiming' && state !== 'charging' && state !== 'placing')) return;
+  const c = cueBall().body;
+  const body = {
+    angle: Math.round(aimAngle * 1e4) / 1e4,
+    power: state === 'charging' ? Math.round(power * 1e3) / 1e3 : 0,
+    spin,
+    cx: q6(c.x),
+    cz: q6(c.z),
+    placing: state === 'placing',
+  };
+  const key = JSON.stringify(body);
+  if (key === lastAimSent) return;
+  if (net.sendAim({ seq: ++aimCounter, stateSeq, by: seatStr(), ...body })) lastAimSent = key;
+}
+
 function frame() {
   countFps();
   const dt = Math.min(clock.getDelta(), 1 / 30);
@@ -1053,28 +1275,21 @@ function frame() {
   }
 
   if (state === 'rolling') {
-    const ev = step(balls.map((b) => b.body), dt);
-    // En el saque hay muchos choques a la vez: solo suenan los más fuertes
-    [...ev.ballHits].sort((a, b) => b.speed - a.speed).slice(0, 5).forEach((h) => sounds.ball(h.speed));
-    for (const hit of ev.ballHits) {
-      if (shot.firstHit === null && (hit.a.id === 0 || hit.b.id === 0)) {
-        shot.firstHit = hit.a.id === 0 ? hit.b.id : hit.a.id;
-        startPip(shot.firstHit);
-      }
+    // Paso fijo: el mismo tiro da el mismo resultado en todos los dispositivos, vayan a los FPS que vayan
+    const bodies = balls.map((b) => b.body);
+    simAcc += dt;
+    while (simAcc >= FIXED_DT) {
+      handleSimEvents(step(bodies, FIXED_DT));
+      simAcc -= FIXED_DT;
     }
-    for (const s of ev.cushionHits) sounds.cushion(s);
-    for (const body of ev.potted) {
-      sounds.pocket();
-      shot.potted.push(body.id);
-      const pocket = nearestPocket(body.x, body.z);
-      balls[body.id].sinking = { x: pocket.x, z: pocket.z };
-    }
-    if (ev.potted.length) renderHud();
   }
+
+  updateRemoteAim(dt);
+  sendLocalAim();
 
   syncMeshes(dt);
 
-  if (state === 'rolling' && !isMoving(balls.map((b) => b.body)) && balls.every((b) => !b.sinking)) {
+  if (state === 'rolling' && !remoteDone && !isMoving(balls.map((b) => b.body)) && balls.every((b) => !b.sinking)) {
     endShot();
   }
 
@@ -1317,7 +1532,8 @@ window.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') setHow(false);
 });
 
-document.querySelector('#play')!.addEventListener('click', () => {
+/** Pasa del menú a la partida (la misma transición para el modo local y el online). */
+function enterGame() {
   unlockAudio();
   startScreen.classList.add('leaving');
   setTimeout(() => (startScreen.hidden = true), 600);
@@ -1328,7 +1544,262 @@ document.querySelector('#play')!.addEventListener('click', () => {
   setView(startView, false);
   cameraForPlacing();
   if (touch) showMessage('Toca la mesa para colocar la blanca · pellizca para acercar');
+}
+document.querySelector('#play')!.addEventListener('click', enterGame);
+
+// ---------- Interfaz del modo online ----------
+const onlineSheet = document.querySelector<HTMLDivElement>('#online')!;
+const onlineHome = document.querySelector<HTMLDivElement>('#online-home')!;
+const onlineWait = document.querySelector<HTMLDivElement>('#online-wait')!;
+const onlineError = document.querySelector<HTMLParagraphElement>('#online-error')!;
+const nameInput = document.querySelector<HTMLInputElement>('#online-name')!;
+const codeInput = document.querySelector<HTMLInputElement>('#join-code')!;
+const roomCodeEl = document.querySelector<HTMLDivElement>('#room-code')!;
+const waitIntro = document.querySelector<HTMLParagraphElement>('#wait-intro')!;
+const waitText = document.querySelector<HTMLParagraphElement>('#wait-text')!;
+const copyBtn = document.querySelector<HTMLButtonElement>('#copy-link')!;
+const createBtn = document.querySelector<HTMLButtonElement>('#create-room')!;
+const joinBtn = document.querySelector<HTMLButtonElement>('#join-room')!;
+const netStatus = document.querySelector<HTMLDivElement>('#net-status')!;
+const netText = document.querySelector<HTMLSpanElement>('#net-text')!;
+const netLeave = document.querySelector<HTMLButtonElement>('#net-leave')!;
+let presence: [boolean, boolean] = [false, false];
+let rematchFlags: [boolean, boolean] = [false, false];
+
+try {
+  nameInput.value = localStorage.getItem('billar-name') ?? '';
+} catch {
+  /* sin almacenamiento */
+}
+
+function setOnlineSheet(open: boolean) {
+  onlineSheet.hidden = !open;
+  if (!open) return;
+  onlineHome.hidden = !!net;
+  onlineWait.hidden = !net;
+  (net ? copyBtn : nameInput).focus();
+}
+
+function updateNetStatus() {
+  if (!net) return;
+  const rivalIn = presence[1 - mySeat];
+  netStatus.classList.toggle('offline', !rivalIn);
+  netText.textContent = rivalIn ? `Sala ${net.code}` : `Sala ${net.code} · rival desconectado`;
+  if (!gameStarted) {
+    waitText.classList.toggle('ready', rivalIn);
+    waitText.textContent = rivalIn
+      ? 'Rival conectado. Empezando…'
+      : net.isHost
+        ? 'Esperando al rival…'
+        : 'Conectado. Esperando al anfitrión…';
+  }
+}
+
+function beginOnlineGame() {
+  if (gameStarted) return;
+  gameStarted = true;
+  setOnlineSheet(false);
+  document.body.classList.add('online');
+  netStatus.hidden = false;
+  enterGame();
+  updateNetStatus();
+}
+
+/** El anfitrión empieza cuando el rival se ha sentado (con una pausa por si es una reconexión con partida en curso). */
+function maybeStartAsHost() {
+  if (!net || !net.isHost || gameStarted || !presence[0] || !presence[1]) return;
+  setTimeout(() => {
+    if (net && !gameStarted && !hasState && presence[0] && presence[1]) {
+      gameId = 1;
+      beginOnlineGame();
+      publishState(-1, false, false, '');
+    }
+  }, 1200);
+}
+
+function handleNetState(m: StateMsg) {
+  if (m.seq <= stateSeq) return; // ya aplicado (o es el mío)
+  hasState = true;
+  if (!gameStarted) beginOnlineGame();
+  if (remoteShot && !remoteDone) {
+    pendingState = m; // mi simulación del tiro del rival aún no ha terminado
+    return;
+  }
+  applyState(m);
+}
+
+function handleNetShot(m: ShotMsg) {
+  if (!gameStarted || state === 'rolling' || m.stateSeq !== stateSeq || m.stateSeq === lastRemoteShot) return;
+  lastRemoteShot = m.stateSeq;
+  remoteShot = true;
+  remoteDone = false;
+  launchShot(m);
+}
+
+function handleRematch() {
+  if (!net || state !== 'over') return;
+  const rival = rematchFlags[1 - mySeat];
+  const me = rematchFlags[mySeat];
+  restartBtn.disabled = me;
+  restartBtn.textContent = me ? 'Esperando al rival…' : rival ? 'Aceptar revancha' : 'Revancha';
+  if (net.isHost && rematchFlags[0] && rematchFlags[1]) {
+    gameId += 1;
+    net.setRematch(false);
+    resetRematchButton();
+    newGame();
+    setView(startView, false);
+    cameraForPlacing();
+    publishState(-1, false, false, '');
+  }
+}
+
+const netEvents: NetEvents = {
+  onNames(names) {
+    onlineNames = names;
+    players.forEach((p, i) => (p.name = names[i] || `Jugador ${i + 1}`));
+    renderHud();
+  },
+  onPresence(p) {
+    presence = p;
+    updateNetStatus();
+    maybeStartAsHost();
+  },
+  onState: handleNetState,
+  onShot: handleNetShot,
+  onAim(m) {
+    if (gameStarted && m.stateSeq === stateSeq && current !== mySeat) remoteAim = m;
+  },
+  onRematch(flags) {
+    rematchFlags = flags;
+    handleRematch();
+  },
+  onClosed() {
+    if (!gameStarted) {
+      void leaveOnline();
+      setOnlineSheet(true);
+      showOnlineError('La sala ya no existe.');
+    }
+  },
+};
+
+function showOnlineError(text: string) {
+  onlineError.textContent = text;
+  onlineError.hidden = false;
+}
+
+/** Sale de la sala y deja todo listo para una partida nueva. */
+async function leaveOnline() {
+  const n = net;
+  net = null;
+  gameStarted = false;
+  hasState = false;
+  stateSeq = 0;
+  gameId = 0;
+  lastRemoteShot = 0;
+  remoteShot = remoteDone = false;
+  pendingState = null;
+  remoteAim = null;
+  lastAimSent = '';
+  onlineNames = ['', ''];
+  presence = [false, false];
+  rematchFlags = [false, false];
+  document.body.classList.remove('online');
+  netStatus.hidden = true;
+  resetRematchButton();
+  onlineHome.hidden = false;
+  onlineWait.hidden = true;
+  await n?.leave();
+}
+
+async function openRoom(kind: 'create' | 'join') {
+  const name = nameInput.value.trim() || 'Jugador';
+  try {
+    localStorage.setItem('billar-name', name);
+  } catch {
+    /* sin almacenamiento */
+  }
+  onlineError.hidden = true;
+  createBtn.disabled = joinBtn.disabled = true;
+  unlockAudio();
+  try {
+    const mod = await import('./net'); // el SDK de Firebase solo se descarga al entrar en el modo online
+    net =
+      kind === 'create'
+        ? await mod.createRoom(name, netEvents)
+        : await mod.joinRoom(codeInput.value, name, netEvents);
+    mySeat = net.seat;
+    roomCodeEl.textContent = net.code;
+    waitIntro.textContent = kind === 'create' ? 'Comparte este código con tu rival' : 'Sala encontrada';
+    onlineHome.hidden = true;
+    onlineWait.hidden = false;
+    copyBtn.focus();
+    updateNetStatus();
+  } catch (e) {
+    console.error(e);
+    net = null;
+    const { RoomError } = await import('./net');
+    showOnlineError(
+      e instanceof RoomError
+        ? e.reason === 'missing'
+          ? 'No existe ninguna sala con ese código.'
+          : 'La sala ya está completa.'
+        : 'No se pudo conectar. Comprueba tu conexión e inténtalo de nuevo.',
+    );
+  } finally {
+    createBtn.disabled = joinBtn.disabled = false;
+  }
+}
+
+createBtn.addEventListener('click', () => void openRoom('create'));
+joinBtn.addEventListener('click', () => void openRoom('join'));
+codeInput.addEventListener('input', () => (codeInput.value = codeInput.value.toUpperCase().replace(/[^A-Z0-9]/g, '')));
+codeInput.addEventListener('keydown', (e) => e.key === 'Enter' && void openRoom('join'));
+nameInput.addEventListener('keydown', (e) => e.key === 'Enter' && void openRoom(codeInput.value ? 'join' : 'create'));
+document.querySelector('#online-btn')!.addEventListener('click', () => {
+  unlockAudio();
+  sounds.ui();
+  setOnlineSheet(true);
 });
+function cancelOnline() {
+  if (gameStarted) return;
+  setOnlineSheet(false);
+  if (net) void leaveOnline();
+}
+document.querySelector('#online-close')!.addEventListener('click', cancelOnline);
+onlineSheet.addEventListener('click', (e) => e.target === onlineSheet && cancelOnline());
+window.addEventListener('keydown', (e) => e.key === 'Escape' && !onlineSheet.hidden && cancelOnline());
+
+copyBtn.addEventListener('click', async () => {
+  const url = `${location.origin}${location.pathname}?sala=${net?.code ?? ''}`;
+  try {
+    await navigator.clipboard.writeText(url);
+    copyBtn.textContent = '¡Enlace copiado!';
+  } catch {
+    copyBtn.textContent = url; // sin portapapeles (p. ej. HTTP): se muestra para copiarlo a mano
+  }
+  setTimeout(() => (copyBtn.textContent = 'Copiar enlace'), 2500);
+});
+
+// Salir de la sala en mitad de la partida: hay que pulsar dos veces
+let leaveArmedAt = 0;
+netLeave.addEventListener('click', () => {
+  if (performance.now() - leaveArmedAt > 3000) {
+    leaveArmedAt = performance.now();
+    netLeave.textContent = '¿Seguro?';
+    setTimeout(() => (netLeave.textContent = 'Salir'), 3000);
+    return;
+  }
+  leaveArmedAt = 0;
+  netLeave.textContent = 'Salir';
+  goToMenu();
+});
+
+// Enlace de invitación: ?sala=ABCDE abre la hoja con el código ya escrito
+const invited = new URLSearchParams(location.search).get('sala');
+if (invited) {
+  codeInput.value = invited.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5);
+  setOnlineSheet(true);
+}
 
 if (touch) {
   // En móvil: el efecto va junto a los botones de tiro y el sonido arriba a la derecha

@@ -1,0 +1,43 @@
+{
+  "rules": {
+    "rooms": {
+      "$room": {
+        ".read": "auth != null",
+        ".write": "auth != null && ((!data.exists() && newData.child('host').val() === auth.uid && newData.child('seats').child('0').val() === auth.uid) || (data.child('host').val() === auth.uid && !data.child('seats').child('1').exists() && !newData.exists()))",
+        "seats": {
+          "$seat": {
+            ".validate": "($seat === '0' || $seat === '1') && newData.isString() && newData.val().length < 40",
+            ".write": "auth != null && root.child('rooms').child($room).child('host').exists() && ((!data.exists() && newData.val() === auth.uid) || data.val() === auth.uid)"
+          }
+        },
+        "names": {
+          "$seat": {
+            ".validate": "newData.isString() && newData.val().length <= 20",
+            ".write": "auth != null && root.child('rooms').child($room).child('seats').child($seat).val() === auth.uid"
+          }
+        },
+        "presence": {
+          "$seat": {
+            ".validate": "newData.isBoolean()",
+            ".write": "auth != null && root.child('rooms').child($room).child('seats').child($seat).val() === auth.uid"
+          }
+        },
+        "rematch": {
+          "$seat": {
+            ".validate": "newData.isBoolean()",
+            ".write": "auth != null && root.child('rooms').child($room).child('seats').child($seat).val() === auth.uid"
+          }
+        },
+        "state": {
+          ".write": "auth != null && ((root.child('rooms').child($room).child('host').val() === auth.uid && (!data.exists() || data.child('phase').val() === 'over')) || (data.exists() && root.child('rooms').child($room).child('seats').child(data.child('turn').val()).val() === auth.uid))"
+        },
+        "shot": {
+          ".write": "auth != null && root.child('rooms').child($room).child('state').exists() && root.child('rooms').child($room).child('seats').child(root.child('rooms').child($room).child('state').child('turn').val()).val() === auth.uid"
+        },
+        "aim": {
+          ".write": "auth != null && root.child('rooms').child($room).child('state').exists() && root.child('rooms').child($room).child('seats').child(root.child('rooms').child($room).child('state').child('turn').val()).val() === auth.uid"
+        }
+      }
+    }
+  }
+}

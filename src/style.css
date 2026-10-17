@@ -757,3 +757,80 @@ body.free-cam #scene:active { cursor: grabbing; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: 0.01s !important; animation: none !important; }
 }
+
+/* ---------- Jugar online ---------- */
+.field { display: grid; gap: 6px; margin-bottom: 14px; font-size: 13px; font-weight: 600; color: var(--ink-2); }
+.field input, .join-row input {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px solid var(--hairline);
+  border-radius: 14px;
+  background: var(--fill);
+  color: var(--ink);
+  font: 600 17px var(--font-ui);
+}
+.field input::placeholder, .join-row input::placeholder { color: var(--ink-2); font-weight: 400; }
+#online-home .btn, #online-wait .btn { width: 100%; }
+.or { margin: 18px 0 12px; text-align: center; font-size: 13px; color: var(--ink-2); }
+.join-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+.join-row input { text-transform: uppercase; letter-spacing: 0.25em; text-align: center; }
+.form-error { margin: 12px 0 0; font-size: 14px; color: #ff9a8f; }
+.muted { color: var(--ink-2); font-size: 15px; margin: 0; }
+#online-wait { text-align: center; display: grid; gap: 14px; justify-items: center; }
+.room-code {
+  font: 600 56px/1 var(--font-display);
+  letter-spacing: 0.12em;
+  padding: 18px 24px 18px 36px;
+  border-radius: 20px;
+  background: var(--fill);
+  user-select: all;
+}
+.wait-text { display: inline-flex; align-items: center; gap: 10px; }
+.wait-text::before {
+  content: '';
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--ink-2);
+  border-top-color: transparent;
+  animation: spin 0.9s linear infinite;
+}
+.wait-text.ready::before { display: none; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Pastilla con el estado de la sala dentro de la partida */
+#net-status {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px 6px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+#net-status[hidden] { display: none; }
+.net-dot { width: 9px; height: 9px; border-radius: 50%; background: #7cc48a; }
+#net-status.offline .net-dot { background: #ef9a5e; }
+.link-btn {
+  min-height: 32px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 999px;
+  background: var(--fill);
+  color: var(--ink);
+  font: 600 13px var(--font-ui);
+  cursor: pointer;
+}
+.link-btn:hover { background: var(--fill-strong); }
+body.online #message { top: 64px; }
+@media (max-width: 600px) {
+  #net-status { top: 60px; }
+  body.online #message { top: 104px; }
+}

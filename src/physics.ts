@@ -19,6 +19,18 @@ export interface StepEvents {
   potted: Body[];
 }
 
+// Paso de simulación fijo: la misma tirada da exactamente el mismo resultado a cualquier FPS.
+export const FIXED_DT = 1 / 120;
+
+/**
+ * Longitud de un vector 2D. Se usa en lugar de Math.hypot porque este puede dar resultados
+ * distintos en el último bit según el navegador, mientras que sqrt, + y * son exactos en IEEE 754.
+ * Así la física es idéntica en todos los jugadores (necesario para el multijugador).
+ */
+function len(x: number, z: number) {
+  return Math.sqrt(x * x + z * z);
+}
+
 const ROLL_DECEL = 0.12; // m/s² — resistencia a la rodadura del paño
 const SLIDE_DECEL = 0.2 * 9.81; // μ·g — rozamiento bola-paño mientras desliza
 const CUSHION_SPIN_KEEP = 0.5; // parte del giro que la banda invierte junto con la bola
@@ -37,7 +49,7 @@ export function isMoving(bodies: Body[]) {
 export function step(bodies: Body[], dt: number): StepEvents {
   const events: StepEvents = { ballHits: [], cushionHits: [], potted: [] };
   const active = bodies.filter((b) => b.active);
-  const maxSpeed = Math.max(0, ...active.map((b) => Math.hypot(b.vx, b.vz)));
+  const maxSpeed = Math.max(0, ...active.map((b) => len(b.vx, b.vz)));
   const substeps = Math.max(4, Math.ceil((maxSpeed * dt) / MAX_SUBSTEP_TRAVEL));
   const h = dt / substeps;
 
@@ -65,7 +77,7 @@ export function step(bodies: Body[], dt: number): StepEvents {
 function integrate(b: Body, h: number) {
   const ux = b.vx - b.rx; // velocidad del punto de contacto con el paño
   const uz = b.vz - b.rz;
-  const u = Math.hypot(ux, uz);
+  const u = len(ux, uz);
 
   if (u > 1e-6) {
     // Deslizando: el rozamiento frena la bola y a la vez cambia su giro hasta que rueda.
@@ -82,7 +94,7 @@ function integrate(b: Body, h: number) {
     }
   } else {
     // Rodando: solo la resistencia a la rodadura
-    const speed = Math.hypot(b.vx, b.vz);
+    const speed = len(b.vx, b.vz);
     const newSpeed = speed - ROLL_DECEL * h;
     if (newSpeed < STOP_SPEED) {
       b.vx = b.vz = b.rx = b.rz = 0;
@@ -111,7 +123,7 @@ function collideCushions(b: Body, events: StepEvents) {
     const t = Math.max(0, Math.min(1, ((b.x - x0) * sx + (b.z - z0) * sz) / (sx * sx + sz * sz)));
     const dx = b.x - (x0 + sx * t);
     const dz = b.z - (z0 + sz * t);
-    const dist = Math.hypot(dx, dz);
+    const dist = len(dx, dz);
     if (dist >= BALL_R || dist === 0) continue;
 
     const nx = dx / dist;
@@ -139,7 +151,7 @@ function collideCushions(b: Body, events: StepEvents) {
 
 function checkPocket(b: Body) {
   for (const p of POCKETS) {
-    if (Math.hypot(b.x - p.x, b.z - p.z) < p.r) return true;
+    if (len(b.x - p.x, b.z - p.z) < p.r) return true;
   }
   // Si ha pasado la línea del raíl solo puede estar dentro de una tronera
   return Math.abs(b.x) > HALF_L + CUSHION_W || Math.abs(b.z) > HALF_W + CUSHION_W;
@@ -149,7 +161,7 @@ function collideBalls(a: Body, b: Body, events: StepEvents) {
   if (!a.active || !b.active) return;
   const dx = b.x - a.x;
   const dz = b.z - a.z;
-  const dist = Math.hypot(dx, dz);
+  const dist = len(dx, dz);
   const minDist = BALL_R * 2;
   if (dist >= minDist || dist === 0) return;
 

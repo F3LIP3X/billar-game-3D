@@ -26,3 +26,6 @@ dist-ssr
 # Firebase
 .firebase/
 firebase-debug.log
+
+# Pruebas temporales
+.tmp-test/
