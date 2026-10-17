@@ -57,9 +57,14 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0c0a09);
 const fog = new THREE.Fog(0x0c0a09, 4, 11);
 scene.fog = fog;
-const pmrem = new THREE.PMREMGenerator(renderer);
-scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-scene.environmentIntensity = 0.18;
+if (!low) {
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+  scene.environmentIntensity = 0.18;
+}
+// En calidad baja el vidrio de la interfaz es opaco: desenfocar un lienzo 3D que se redibuja
+// en cada fotograma es muy caro en móvil
+document.documentElement.classList.toggle('low', low);
 
 const camera = new THREE.PerspectiveCamera(42, 1, 0.02, 40);
 camera.position.set(-2.3, 1.5, 0.9);
@@ -947,13 +952,62 @@ const clock = new THREE.Clock();
 const fpsEl = document.querySelector<HTMLDivElement>('#fps')!;
 let fpsFrames = 0;
 let fpsSince = performance.now();
+const loadedAt = performance.now();
+let slowWindows = 0;
+let fastWindows = 0;
+let lastDrop = 0;
+let degradeStep = 0;
+const MIN_SCALE = 0.55;
+
+/** Si faltan recursos para este equipo: primero se baja la resolución y, en el mínimo, se quitan reflejos y sombras. */
+function degradeGraphics() {
+  if (degradeStep === 0) {
+    scene.environment = null;
+    console.info('Calidad: sin reflejos de entorno');
+  } else if (degradeStep === 1) {
+    renderer.shadowMap.enabled = false;
+    console.info('Calidad: sin sombras');
+  } else return;
+  degradeStep++;
+  scene.traverse((o) => {
+    if (o instanceof THREE.Mesh) [o.material].flat().forEach((m: THREE.Material) => (m.needsUpdate = true));
+  });
+}
+
+/** Resolución dinámica: si los FPS caen se baja la resolución del lienzo; si sobran, se vuelve a subir. */
+function adaptResolution(fps: number) {
+  const now = performance.now();
+  if (now - loadedAt < 3000) return; // el arranque compila shaders y no cuenta
+  if (fps < 40) {
+    fastWindows = 0;
+    if (++slowWindows >= 2) {
+      slowWindows = 0;
+      lastDrop = now;
+      if (resScale > MIN_SCALE) {
+        resScale = Math.max(MIN_SCALE, resScale * 0.8);
+        applyResolution();
+        console.info(`Resolución dinámica: ${Math.round(resScale * 100)}%`);
+      } else degradeGraphics();
+    }
+  } else {
+    slowWindows = 0;
+    if (fps >= 57 && resScale < 1 && now - lastDrop > 15000 && ++fastWindows >= 6) {
+      fastWindows = 0;
+      resScale = Math.min(1, resScale * 1.15);
+      applyResolution();
+    }
+  }
+}
+
 function countFps() {
   fpsFrames++;
   const now = performance.now();
   if (now - fpsSince >= 500) {
-    fpsEl.textContent = `${Math.round((fpsFrames * 1000) / (now - fpsSince))} FPS`;
+    const fps = (fpsFrames * 1000) / (now - fpsSince);
+    fpsEl.textContent = `${Math.round(fps)} FPS`;
     fpsFrames = 0;
     fpsSince = now;
+    adaptResolution(fps);
   }
 }
 
@@ -1182,11 +1236,18 @@ function applyMenuOffset() {
   camera.updateProjectionMatrix();
 }
 
+let resScale = 1; // factor de resolución dinámica (1 = completa)
+function applyResolution() {
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  renderer.setPixelRatio(pixelRatioFor(w, h) * resScale);
+  renderer.setSize(w, h, false);
+}
+
 function resize() {
   const w = window.innerWidth;
   const h = window.innerHeight;
-  renderer.setPixelRatio(pixelRatioFor(w, h));
-  renderer.setSize(w, h, false);
+  applyResolution();
   camera.aspect = w / h;
   applyMenuOffset();
   // Al cambiar el tamaño de la ventana se reencuadra la vista fija actual
@@ -1233,7 +1294,7 @@ document.querySelector('#play')!.addEventListener('click', () => {
 });
 
 resize();
-prewarmPip();
+if (!low) prewarmPip();
 document.querySelector('#gfx-reload')!.addEventListener('click', () => location.reload());
 if (new URLSearchParams(location.search).has('debug')) {
   const gl = renderer.getContext();

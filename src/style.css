@@ -61,6 +61,13 @@ button:focus-visible, a:focus-visible {
   box-shadow: var(--shadow), inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
+/* Calidad baja: vidrio opaco, sin desenfoque (muy caro sobre el lienzo 3D en móvil) */
+.low .glass {
+  background: rgba(28, 27, 31, 0.9);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
 /* Botón principal (latón) y secundario (relleno neutro) */
 .btn {
   display: inline-flex;
