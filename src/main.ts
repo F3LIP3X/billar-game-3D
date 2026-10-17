@@ -716,6 +716,23 @@ document.querySelectorAll<HTMLButtonElement>('[data-view]').forEach((b) =>
   }),
 );
 
+// Ventana de controles: botón ?, tecla ? y se cierra con Esc o al volver a la mesa
+const helpBtn = document.querySelector<HTMLButtonElement>('#help-btn')!;
+const helpPop = document.querySelector<HTMLDivElement>('#help-pop')!;
+function setHelp(open: boolean) {
+  helpPop.classList.toggle('open', open);
+  helpBtn.setAttribute('aria-expanded', String(open));
+}
+helpBtn.addEventListener('click', () => {
+  sounds.ui();
+  setHelp(!helpPop.classList.contains('open'));
+});
+canvas.addEventListener('pointerdown', () => setHelp(false));
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') setHelp(false);
+  if (e.key === '?') setHelp(!helpPop.classList.contains('open'));
+});
+
 const muteBtn = document.querySelector<HTMLButtonElement>('#mute')!;
 function renderMute() {
   muteBtn.classList.toggle('off', isMuted());

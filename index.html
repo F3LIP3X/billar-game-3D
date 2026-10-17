@@ -19,7 +19,7 @@
       <div class="start-inner">
         <p class="eyebrow">Bola 8 · 2 jugadores</p>
         <h1 class="title">Billar <span>3D</span></h1>
-        <button id="play">Jugar</button>
+        <button id="play" class="btn btn-primary">Jugar</button>
       </div>
       <footer class="credits">
         <span>© 2026 Felipe Toledano</span>
@@ -35,61 +35,82 @@
     </div>
 
     <div id="hud" hidden>
-      <div id="message"></div>
-      <div id="turn-banner" aria-live="polite"></div>
+      <div id="message" class="glass" role="status"></div>
+      <div id="turn-banner" class="glass" aria-live="polite"></div>
       <div id="pip" aria-hidden="true"><span id="pip-label"></span></div>
-      <div id="free-cam-badge">Cámara libre · arrastra para girar, clic derecho para desplazar · suelta Ctrl para jugar</div>
+      <div id="free-cam-badge" class="glass"><strong>Cámara libre</strong> · arrastra para girar, clic derecho para desplazar · suelta Ctrl para jugar</div>
 
-      <aside class="player" data-player="0">
-        <span class="turn-tag">Turno</span>
-        <span class="name">Jugador 1</span>
+      <aside class="player glass" data-player="0" aria-label="Jugador 1">
+        <div class="player-head">
+          <span class="dot" aria-hidden="true"></span>
+          <span class="name">Jugador 1</span>
+          <span class="turn-tag">Su turno</span>
+        </div>
         <span class="group"></span>
         <div class="tray"></div>
       </aside>
-      <aside class="player" data-player="1">
-        <span class="turn-tag">Turno</span>
-        <span class="name">Jugador 2</span>
+      <aside class="player glass" data-player="1" aria-label="Jugador 2">
+        <div class="player-head">
+          <span class="dot" aria-hidden="true"></span>
+          <span class="name">Jugador 2</span>
+          <span class="turn-tag">Su turno</span>
+        </div>
         <span class="group"></span>
         <div class="tray"></div>
       </aside>
 
 
       <div class="bottom">
-        <div class="shot-row">
+        <div id="power" role="progressbar" aria-label="Potencia"><div id="power-fill"></div></div>
+
+        <div id="touch-controls">
+          <div class="fine">
+            <button class="glass" data-fine="-1" aria-label="Girar a la izquierda">‹</button>
+            <button class="glass" data-fine="1" aria-label="Girar a la derecha">›</button>
+          </div>
+          <button id="shoot-btn" class="btn btn-primary">Mantén para tirar</button>
+        </div>
+
+        <div class="toolbar glass">
           <button id="spin" aria-label="Efecto: pulsa arriba para seguir, abajo para retroceso">
             <span class="spin-ball"><span id="spin-dot"></span></span>
             <span id="spin-label">Centro</span>
           </button>
-          <div id="power"><div id="power-fill"></div></div>
-          <button id="mute" aria-label="Silenciar">
+          <button id="mute" class="icon-btn" aria-label="Silenciar">
             <svg class="on-icon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor"/><path d="M16 8.5a4.5 4.5 0 0 1 0 7M18.5 6a8 8 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
             <svg class="off-icon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor"/><path d="M16.5 9.5l5 5M21.5 9.5l-5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
           </button>
+          <button id="help-btn" class="icon-btn" aria-label="Controles" aria-expanded="false" aria-controls="help-pop" title="Controles (?)">
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M9.6 9.4a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1.1.9-1.1 1.6v.4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="16.9" r="1.1" fill="currentColor"/></svg>
+          </button>
+          <span class="sep" aria-hidden="true"></span>
           <div class="views" role="group" aria-label="Cámara">
             <button data-view="3d" class="on">3D</button>
             <button data-view="2d">2D</button>
             <button data-view="cue">Tras la bola</button>
           </div>
-        </div>
 
-        <div id="touch-controls">
-          <div class="fine">
-            <button data-fine="-1" aria-label="Girar a la izquierda">‹</button>
-            <button data-fine="1" aria-label="Girar a la derecha">›</button>
+          <div id="help-pop" class="glass" role="dialog" aria-label="Controles">
+            <h2>Controles</h2>
+            <dl>
+              <dt>Ratón</dt><dd>Apuntar</dd>
+              <dt>Clic mantenido</dt><dd>Cargar potencia; suelta para tirar</dd>
+              <dt>Shift + ratón · ← →</dt><dd>Ajuste fino</dd>
+              <dt>↑ ↓</dt><dd>Efecto: seguir o retroceso</dd>
+              <dt>Clic derecho</dt><dd>Girar la cámara</dd>
+              <dt>Botón central</dt><dd>Desplazar la cámara</dd>
+              <dt>Rueda</dt><dd>Zoom</dd>
+              <dt>Ctrl</dt><dd>Cámara libre</dd>
+              <dt>1 · 2 · V</dt><dd>Vistas 3D, 2D y tras la bola</dd>
+              <dt>M</dt><dd>Sonido</dd>
+            </dl>
           </div>
-          <button id="shoot-btn">Mantén para tirar</button>
         </div>
-
-
-        <p class="help">
-          Mueve el ratón para apuntar · Mantén clic para cargar, suelta para tirar · Shift + ratón o ← →: ajuste fino · ↑ ↓ efecto ·
-          Clic derecho: girar · Botón central: desplazar · Rueda: zoom · Ctrl: cámara libre · M: sonido · 1 / 2 / V: vistas 3D, 2D y tras la bola
-        </p>
       </div>
 
       <div id="overlay" hidden>
         <canvas id="confetti"></canvas>
-        <div class="victory" role="dialog" aria-labelledby="winner-name">
+        <div class="victory glass" role="dialog" aria-modal="true" aria-labelledby="winner-name">
           <div class="emblem" aria-hidden="true"><span>8</span></div>
           <p class="eyebrow">Victoria</p>
           <h2 id="winner-name"></h2>
@@ -106,8 +127,8 @@
           </table>
           <p class="duration">Duración <span id="duration"></span></p>
           <div class="actions">
-            <button id="restart" class="primary">Revancha</button>
-            <button id="to-menu" class="ghost">Menú</button>
+            <button id="restart" class="btn btn-primary">Revancha</button>
+            <button id="to-menu" class="btn btn-secondary">Menú</button>
           </div>
         </div>
       </div>
