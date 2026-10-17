@@ -39,21 +39,31 @@
 
 
       <div class="bottom">
-        <div id="power"><div id="power-fill"></div></div>
+        <div class="shot-row">
+          <button id="spin" aria-label="Efecto: pulsa arriba para seguir, abajo para retroceso">
+            <span class="spin-ball"><span id="spin-dot"></span></span>
+            <span id="spin-label">Centro</span>
+          </button>
+          <div id="power"><div id="power-fill"></div></div>
+          <div class="views" role="group" aria-label="Cámara">
+            <button data-view="3d" class="on">3D</button>
+            <button data-view="2d">2D</button>
+            <button data-view="cue">Tras la bola</button>
+          </div>
+        </div>
 
         <div id="touch-controls">
           <div class="fine">
             <button data-fine="-1" aria-label="Girar a la izquierda">‹</button>
             <button data-fine="1" aria-label="Girar a la derecha">›</button>
-            <button id="view-btn">Vista</button>
           </div>
           <button id="shoot-btn">Mantén para tirar</button>
         </div>
 
 
         <p class="help">
-          Mueve el ratón para apuntar · Mantén clic para cargar, suelta para tirar · ← → ajuste fino ·
-          Clic derecho para girar cámara · Rueda para zoom · V vista tras la bola
+          Mueve el ratón para apuntar · Mantén clic para cargar, suelta para tirar · Shift + ratón o ← →: ajuste fino · ↑ ↓ efecto ·
+          Clic derecho: girar · Botón central: desplazar · Rueda: zoom · 1 / 2 / V: vistas 3D, 2D y tras la bola
         </p>
       </div>
 

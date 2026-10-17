@@ -277,3 +277,70 @@ html, body {
 
 }
 .tray:empty { display: none; }
+
+/* ---------- Efecto ---------- */
+.shot-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  justify-content: center;
+}
+#spin {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 14px 6px 6px;
+  border-radius: 999px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  font: 600 13px Inter, system-ui, sans-serif;
+  cursor: pointer;
+}
+.spin-ball {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fffdf6, #e9e1cf 60%, #bfb39a);
+  display: grid;
+  place-items: center;
+}
+#spin-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #c0392b;
+  transition: transform 0.15s;
+}
+#spin-label { min-width: 72px; text-align: left; }
+
+/* ---------- Vistas de cámara ---------- */
+.views {
+  pointer-events: auto;
+  display: flex;
+  padding: 4px;
+  gap: 2px;
+  border-radius: 999px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+}
+.views button {
+  font: 600 13px Inter, system-ui, sans-serif;
+  color: var(--muted);
+  background: none;
+  border: none;
+  border-radius: 999px;
+  padding: 8px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.views button.on { background: var(--brass); color: #1b1209; }
+@media (max-width: 600px) {
+  .shot-row { gap: 8px; flex-wrap: wrap; }
+  #spin-label { display: none; }
+  #spin { padding: 4px; }
+  .shot-row #power { order: 3; width: 100%; }
+}

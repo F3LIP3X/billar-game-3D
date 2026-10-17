@@ -6,6 +6,10 @@ export interface Body {
   z: number;
   vx: number;
   vz: number;
+  // Giro de la bola expresado como "velocidad de rodadura": la velocidad que tendría si rodara
+  // sin deslizar con su giro actual. Si coincide con (vx, vz) la bola rueda; si no, desliza.
+  rx: number;
+  rz: number;
   active: boolean; // false cuando la bola ha entrado en una tronera
 }
 
@@ -15,7 +19,9 @@ export interface StepEvents {
   potted: Body[];
 }
 
-const ROLL_DECEL = 0.18; // m/s² — resistencia a la rodadura del paño
+const ROLL_DECEL = 0.12; // m/s² — resistencia a la rodadura del paño
+const SLIDE_DECEL = 0.2 * 9.81; // μ·g — rozamiento bola-paño mientras desliza
+const CUSHION_SPIN_KEEP = 0.5; // parte del giro que la banda invierte junto con la bola
 const BALL_RESTITUTION = 0.95;
 const CUSHION_RESTITUTION = 0.78;
 const STOP_SPEED = 0.004;
@@ -25,7 +31,7 @@ const HALF_L = TABLE_L / 2;
 const HALF_W = TABLE_W / 2;
 
 export function isMoving(bodies: Body[]) {
-  return bodies.some((b) => b.active && (b.vx !== 0 || b.vz !== 0));
+  return bodies.some((b) => b.active && (b.vx !== 0 || b.vz !== 0 || b.rx !== 0 || b.rz !== 0));
 }
 
 export function step(bodies: Body[], dt: number): StepEvents {
@@ -42,7 +48,7 @@ export function step(bodies: Body[], dt: number): StepEvents {
       collideCushions(b, events);
       if (checkPocket(b)) {
         b.active = false;
-        b.vx = b.vz = 0;
+        b.vx = b.vz = b.rx = b.rz = 0;
         events.potted.push(b);
       }
     }
@@ -57,16 +63,35 @@ export function step(bodies: Body[], dt: number): StepEvents {
 }
 
 function integrate(b: Body, h: number) {
-  const speed = Math.hypot(b.vx, b.vz);
-  if (speed === 0) return;
-  const newSpeed = speed - ROLL_DECEL * h;
-  if (newSpeed < STOP_SPEED) {
-    b.vx = b.vz = 0;
-    return;
+  const ux = b.vx - b.rx; // velocidad del punto de contacto con el paño
+  const uz = b.vz - b.rz;
+  const u = Math.hypot(ux, uz);
+
+  if (u > 1e-6) {
+    // Deslizando: el rozamiento frena la bola y a la vez cambia su giro hasta que rueda.
+    // (Para una esfera maciza el giro cambia 5/2 veces más rápido que la velocidad.)
+    if (u <= 3.5 * SLIDE_DECEL * h) {
+      b.vx = b.rx = (5 * b.vx + 2 * b.rx) / 7;
+      b.vz = b.rz = (5 * b.vz + 2 * b.rz) / 7;
+    } else {
+      const k = (SLIDE_DECEL * h) / u;
+      b.vx -= ux * k;
+      b.vz -= uz * k;
+      b.rx += 2.5 * ux * k;
+      b.rz += 2.5 * uz * k;
+    }
+  } else {
+    // Rodando: solo la resistencia a la rodadura
+    const speed = Math.hypot(b.vx, b.vz);
+    const newSpeed = speed - ROLL_DECEL * h;
+    if (newSpeed < STOP_SPEED) {
+      b.vx = b.vz = b.rx = b.rz = 0;
+      return;
+    }
+    const k = newSpeed / speed;
+    b.vx = b.rx = b.vx * k;
+    b.vz = b.rz = b.vz * k;
   }
-  const k = newSpeed / speed;
-  b.vx *= k;
-  b.vz *= k;
   b.x += b.vx * h;
   b.z += b.vz * h;
 }
@@ -102,6 +127,12 @@ function collideCushions(b: Body, events: StepEvents) {
       const tz = b.vz - vn * nz;
       b.vx = tx * 0.95 - vn * CUSHION_RESTITUTION * nx;
       b.vz = tz * 0.95 - vn * CUSHION_RESTITUTION * nz;
+      // La banda golpea por encima del centro y le da la vuelta a parte del giro
+      const rn = b.rx * nx + b.rz * nz;
+      if (rn < 0) {
+        b.rx -= rn * (1 + CUSHION_SPIN_KEEP) * nx;
+        b.rz -= rn * (1 + CUSHION_SPIN_KEEP) * nz;
+      }
     }
   }
 }

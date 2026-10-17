@@ -32,7 +32,8 @@ renderer.toneMappingExposure = 1.05;
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0c0a09);
-scene.fog = new THREE.Fog(0x0c0a09, 4, 11);
+const fog = new THREE.Fog(0x0c0a09, 4, 11);
+scene.fog = fog;
 const pmrem = new THREE.PMREMGenerator(renderer);
 scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 scene.environmentIntensity = 0.18;
@@ -43,12 +44,16 @@ camera.position.set(-2.3, 1.5, 0.9);
 const controls = new OrbitControls(camera, canvas);
 controls.target.set(0, 0, 0);
 controls.enableDamping = true;
-controls.maxPolarAngle = Math.PI * 0.47;
-controls.minDistance = 0.4;
-controls.maxDistance = 5;
+controls.dampingFactor = 0.08;
+controls.maxPolarAngle = Math.PI * 0.495; // desde la vertical hasta casi a ras de mesa
+controls.minDistance = 0.25;
+controls.maxDistance = 20;
+controls.enableZoom = true; // pellizco en táctil; la rueda se gestiona aparte con zoom suave
+controls.screenSpacePanning = false; // desplazar sobre el plano de la mesa
+controls.rotateSpeed = 0.7;
 controls.mouseButtons = {
   LEFT: null as unknown as THREE.MOUSE,
-  MIDDLE: THREE.MOUSE.DOLLY,
+  MIDDLE: THREE.MOUSE.PAN,
   RIGHT: THREE.MOUSE.ROTATE,
 };
 controls.touches = {
@@ -60,7 +65,7 @@ controls.autoRotate = true;
 controls.autoRotateSpeed = 0.6;
 
 scene.add(buildTable());
-const { lamps } = buildRoom(scene);
+const { setLampsOpacity } = buildRoom(scene);
 
 const cue = createCue();
 scene.add(cue);
@@ -76,7 +81,12 @@ const ghost = new THREE.Mesh(
   new THREE.SphereGeometry(BALL_R, 24, 16),
   new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.18, depthWrite: false }),
 );
-scene.add(guide, objectGuide, ghost);
+const cueGuide = new THREE.Line(
+  new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]),
+  guideMat.clone(),
+);
+(cueGuide.material as THREE.LineDashedMaterial).opacity = 0.3;
+scene.add(guide, objectGuide, cueGuide, ghost);
 
 // Línea de cabecera y zona de saque, visibles al colocar la blanca para el saque
 const kitchen = new THREE.Group();
@@ -122,7 +132,7 @@ function newGame() {
   const add = (n: number, x: number, z: number) => {
     const mesh = createBallMesh(n);
     scene.add(mesh);
-    balls[n] = { n, body: { id: n, x, z, vx: 0, vz: 0, active: true }, mesh, sinking: null };
+    balls[n] = { n, body: { id: n, x, z, vx: 0, vz: 0, rx: 0, rz: 0, active: true }, mesh, sinking: null };
   };
 
   add(0, HEAD_SPOT.x, HEAD_SPOT.z);
@@ -203,12 +213,26 @@ canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 // En táctil: un dedo apunta / mueve la blanca, dos dedos mueven la cámara y se tira con el botón.
 const touches = new Set<number>();
 
-function aimOrPlace(e: PointerEvent) {
+// El taco apunta siempre al cursor. Con Shift pasa a modo de precisión: el giro es relativo
+// y mucho más lento, para afinar sin que importe lo cerca que esté el cursor de la blanca.
+let lastAimPoint: THREE.Vector3 | null = null;
+const wrapAngle = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
+
+function aimOrPlace(e: PointerEvent, relative: boolean) {
   const p = pointerOnTable(e);
   if (!p) return;
   const c = cueBall().body;
   if (state === 'aiming') {
-    aimAngle = Math.atan2(p.z - c.z, p.x - c.x);
+    const angle = Math.atan2(p.z - c.z, p.x - c.x);
+    if (relative && e.shiftKey && lastAimPoint) {
+      const prev = Math.atan2(lastAimPoint.z - c.z, lastAimPoint.x - c.x);
+      const dist = Math.hypot(p.x - c.x, p.z - c.z);
+      // Sensibilidad fija (no depende de la distancia): equivale a tener el cursor a 2 m
+      aimAngle += wrapAngle(angle - prev) * Math.min(1, dist / 2) * 0.5;
+    } else {
+      aimAngle = angle;
+    }
+    lastAimPoint = p;
   } else if (state === 'placing') {
     const maxX = kitchenOnly ? KITCHEN_X : TABLE_L / 2 - BALL_R;
     c.x = THREE.MathUtils.clamp(p.x, -TABLE_L / 2 + BALL_R, maxX);
@@ -218,7 +242,7 @@ function aimOrPlace(e: PointerEvent) {
 
 canvas.addEventListener('pointermove', (e) => {
   if (e.pointerType === 'touch' && touches.size > 1) return;
-  aimOrPlace(e);
+  aimOrPlace(e, true);
 });
 
 canvas.addEventListener('pointerdown', (e) => {
@@ -226,7 +250,7 @@ canvas.addEventListener('pointerdown', (e) => {
   unlockAudio();
   if (e.pointerType === 'touch') {
     touches.add(e.pointerId);
-    if (touches.size === 1) aimOrPlace(e);
+    if (touches.size === 1) aimOrPlace(e, false);
     return;
   }
   if (state === 'aiming') startCharge();
@@ -265,7 +289,21 @@ document.querySelectorAll<HTMLButtonElement>('[data-fine]').forEach((btn) =>
     if (state === 'aiming') aimAngle += Number(btn.dataset.fine) * 0.003;
   }),
 );
-document.querySelector('#view-btn')!.addEventListener('click', () => cameraBehindCue());
+
+// Efecto: altura del golpe en la blanca, de -0.5 (retroceso) a 0.5 (seguir), en radios
+let spin = 0;
+const spinDot = document.querySelector<HTMLDivElement>('#spin-dot')!;
+const spinLabel = document.querySelector<HTMLSpanElement>('#spin-label')!;
+function setSpin(value: number) {
+  spin = THREE.MathUtils.clamp(Math.round(value * 4) / 4, -0.5, 0.5);
+  spinDot.style.transform = `translateY(${-spin * 36}px)`;
+  spinLabel.textContent = spin > 0 ? 'Seguir' : spin < 0 ? 'Retroceso' : 'Centro';
+}
+document.querySelector('#spin')!.addEventListener('click', (e) => {
+  const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+  const up = (e as MouseEvent).clientY < r.top + r.height / 2;
+  setSpin(spin + (up ? 0.25 : -0.25));
+});
 
 window.addEventListener('keydown', (e) => {
   if (state === 'aiming') {
@@ -273,7 +311,13 @@ window.addEventListener('keydown', (e) => {
     if (e.key === 'ArrowLeft') aimAngle -= delta;
     if (e.key === 'ArrowRight') aimAngle += delta;
   }
-  if ((e.key === 'v' || e.key === 'V') && state !== 'menu') cameraBehindCue();
+  if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') setSpin(spin + 0.25);
+  if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') setSpin(spin - 0.25);
+  if (state !== 'menu') {
+    if (e.key === 'v' || e.key === 'V') setView('cue');
+    if (e.key === '1') setView('3d');
+    if (e.key === '2') setView('2d');
+  }
 });
 
 const bottomBar = document.querySelector<HTMLDivElement>('.bottom')!;
@@ -288,43 +332,166 @@ const TABLE_CORNERS = [-1, 1].flatMap((sx) =>
   [-1, 1].map((sz) => new THREE.Vector3(sx * (TABLE_L / 2 + 0.24), 0.05, sz * (TABLE_W / 2 + 0.24))),
 );
 
-function resetCamera() {
-  // Mesa en vertical, cámara centrada detrás de la cabecera y algo baja, como un jugador.
-  // Se aleja hasta que la mesa entera queda en la zona libre entre los paneles.
+const BASE_FOV = 42;
+const TOP_FOV = 24; // en la vista 2D, poco ángulo para que apenas haya perspectiva
+
+/** Distancia mínima en la dirección `dir` (desde el centro) para que la mesa entera quepa en la zona libre. */
+function fitPosition(dir: THREE.Vector3, fov: number) {
   const w = window.innerWidth;
   const h = window.innerHeight;
-  const mobile = w <= 600;
   let maxX = 0.94;
   let maxY = 0.94;
   const minY = -1 + (2 * (bottomBarHeight() + 8)) / h;
   const panel = document.querySelector<HTMLElement>('.player[data-player="0"]');
   if (panel?.offsetParent) {
     const r = panel.getBoundingClientRect();
-    if (mobile) maxY = 1 - (2 * (r.bottom + 8)) / h;
+    if (w <= 600) maxY = 1 - (2 * (r.bottom + 8)) / h;
     else maxX = 1 - (2 * (r.right + 16)) / w;
   }
-  const elev = THREE.MathUtils.degToRad(mobile ? 52 : 40);
-  controls.target.set(0, 0, 0);
+  const cam = camera.clone();
+  cam.fov = fov;
+  cam.updateProjectionMatrix();
   const p = new THREE.Vector3();
-  for (let dist = 1.5; dist < 15; dist += 0.05) {
-    camera.position.set(-dist * Math.cos(elev), dist * Math.sin(elev), 0.001);
-    camera.lookAt(controls.target);
-    camera.updateMatrixWorld();
+  let dist = 1;
+  for (; dist < 30; dist += 0.05) {
+    cam.position.copy(dir).multiplyScalar(dist);
+    cam.lookAt(0, 0, 0);
+    cam.updateMatrixWorld();
     const fits = TABLE_CORNERS.every((c) => {
-      p.copy(c).project(camera);
+      p.copy(c).project(cam);
       return Math.abs(p.x) < maxX && p.y < maxY && p.y > minY;
     });
     if (fits) break;
   }
+  return dir.clone().multiplyScalar(dist);
 }
 
-function cameraBehindCue() {
+// Transición suave de cámara: se interpola en esféricas alrededor del objetivo (gira alrededor
+// de la mesa en vez de atravesarla) y el objetivo y el ángulo de visión en lineal.
+let camTween: {
+  from: THREE.Spherical;
+  to: THREE.Spherical;
+  fromTarget: THREE.Vector3;
+  toTarget: THREE.Vector3;
+  fromFov: number;
+  toFov: number;
+  start: number;
+} | null = null;
+
+function moveCamera(toPos: THREE.Vector3, toTarget: THREE.Vector3, toFov: number, animate: boolean) {
+  zoomGoal = null;
+  if (!animate) {
+    camera.position.copy(toPos);
+    controls.target.copy(toTarget);
+    camera.fov = toFov;
+    camera.updateProjectionMatrix();
+    return;
+  }
+  const from = new THREE.Spherical().setFromVector3(camera.position.clone().sub(controls.target));
+  const to = new THREE.Spherical().setFromVector3(toPos.clone().sub(toTarget));
+  // Girar por el camino más corto
+  to.theta = from.theta + wrapAngle(to.theta - from.theta);
+  camTween = {
+    from,
+    to,
+    fromTarget: controls.target.clone(),
+    toTarget,
+    fromFov: camera.fov,
+    toFov,
+    start: performance.now(),
+  };
+  controls.enabled = false;
+}
+
+const tweenSph = new THREE.Spherical();
+function updateCameraTween() {
+  if (!camTween) return;
+  const t = Math.min(1, (performance.now() - camTween.start) / 800);
+  const k = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; // ease-in-out
+  const { from, to } = camTween;
+  // El radio en escala logarítmica para que el acercamiento tenga velocidad constante a la vista
+  tweenSph.radius = Math.exp(THREE.MathUtils.lerp(Math.log(from.radius), Math.log(to.radius), k));
+  tweenSph.phi = THREE.MathUtils.lerp(from.phi, to.phi, k);
+  tweenSph.theta = THREE.MathUtils.lerp(from.theta, to.theta, k);
+  controls.target.lerpVectors(camTween.fromTarget, camTween.toTarget, k);
+  camera.position.setFromSpherical(tweenSph).add(controls.target);
+  camera.fov = THREE.MathUtils.lerp(camTween.fromFov, camTween.toFov, k);
+  camera.updateProjectionMatrix();
+  if (t >= 1) {
+    camTween = null;
+    controls.enabled = true;
+  }
+}
+
+// Zoom suave con la rueda, hacia el punto de la mesa bajo el cursor
+let zoomGoal: number | null = null;
+const zoomPoint = new THREE.Vector3();
+window.addEventListener(
+  'wheel',
+  (e) => {
+    if (e.target !== canvas || state === 'menu') return;
+    e.preventDefault();
+    e.stopPropagation(); // que no llegue al zoom a saltos de OrbitControls
+    if (camTween) return;
+    const current = zoomGoal ?? camera.position.distanceTo(controls.target);
+    zoomGoal = THREE.MathUtils.clamp(
+      current * Math.exp(e.deltaY * 0.0015),
+      controls.minDistance,
+      controls.maxDistance,
+    );
+    const p = pointerOnTable(e as unknown as PointerEvent);
+    zoomPoint.copy(p ?? controls.target);
+  },
+  { capture: true, passive: false },
+);
+
+function updateZoom(dt: number) {
+  if (zoomGoal === null) return;
+  const current = camera.position.distanceTo(controls.target);
+  const next = THREE.MathUtils.lerp(current, zoomGoal, 1 - Math.exp(-dt * 12));
+  const f = next / current;
+  // Escalar cámara y objetivo respecto al punto del cursor: ese punto se queda quieto en pantalla
+  controls.target.sub(zoomPoint).multiplyScalar(f).add(zoomPoint);
+  camera.position.sub(zoomPoint).multiplyScalar(f).add(zoomPoint);
+  if (Math.abs(next - zoomGoal) < 0.002) zoomGoal = null;
+}
+
+type View = '3d' | '2d' | 'cue';
+let view: View = '3d';
+function setView(v: View, animate = true) {
+  view = v;
+  document.querySelectorAll<HTMLButtonElement>('[data-view]').forEach((b) => b.classList.toggle('on', b.dataset.view === v));
+  const origin = new THREE.Vector3(0, 0, 0);
+  if (v === '3d') {
+    // Mesa en vertical, cámara centrada detrás de la cabecera y algo baja, como un jugador
+    const elev = THREE.MathUtils.degToRad(window.innerWidth <= 600 ? 52 : 40);
+    const dir = new THREE.Vector3(-Math.cos(elev), Math.sin(elev), 0.0001);
+    moveCamera(fitPosition(dir, BASE_FOV), origin, BASE_FOV, animate);
+  } else if (v === '2d') {
+    // Desde arriba; la mesa a lo largo de la pantalla según la orientación
+    const dir = camera.aspect >= 1 ? new THREE.Vector3(0, 1, 0.0001) : new THREE.Vector3(-0.0001, 1, 0);
+    moveCamera(fitPosition(dir, TOP_FOV), origin, TOP_FOV, animate);
+  } else {
+    const { pos, target } = chaseCamera();
+    moveCamera(pos, target, BASE_FOV, animate);
+  }
+}
+// Vista tras la bola: posición detrás de la blanca según el ángulo de tiro
+const followDist = 0.9;
+function chaseCamera() {
   const c = cueBall().body;
   const dx = Math.cos(aimAngle);
   const dz = Math.sin(aimAngle);
-  camera.position.set(c.x - dx * 0.9, 0.42, c.z - dz * 0.9);
-  controls.target.set(c.x + dx * 0.3, 0, c.z + dz * 0.3);
+  return {
+    pos: new THREE.Vector3(c.x - dx * followDist, followDist * 0.45, c.z - dz * followDist),
+    target: new THREE.Vector3(c.x + dx * 0.3, 0, c.z + dz * 0.3),
+  };
 }
+
+
+document.querySelectorAll<HTMLButtonElement>('[data-view]').forEach((b) =>
+  b.addEventListener('click', () => setView(b.dataset.view as View)),
+);
 
 function placementValid() {
   const c = cueBall().body;
@@ -338,6 +505,9 @@ function shoot() {
   const speed = 0.25 + power * (MAX_SHOT_SPEED - 0.25);
   c.vx = Math.cos(aimAngle) * speed;
   c.vz = Math.sin(aimAngle) * speed;
+  // Golpe a una altura h (en radios) sobre el centro: giro = 5·h/2 · velocidad
+  c.rx = c.vx * 2.5 * spin;
+  c.rz = c.vz * 2.5 * spin;
   sounds.cue(power);
   shot = { firstHit: null, potted: [] };
   onTableBefore = onTable();
@@ -380,6 +550,8 @@ function endShot() {
   }
   showMessage(result.message);
   renderHud();
+  // La vista tras la bola se recoloca detrás de la blanca para el siguiente tiro
+  if (view === 'cue') setView('cue');
 }
 
 // ---------- Bucle ----------
@@ -399,10 +571,11 @@ function syncMeshes(dt: number) {
       continue;
     }
     if (!b.body.active) continue;
-    const speed = Math.hypot(b.body.vx, b.body.vz);
-    if (speed > 0) {
-      tmpAxis.set(b.body.vz, 0, -b.body.vx).divideScalar(speed);
-      tmpQ.setFromAxisAngle(tmpAxis, (speed * dt) / BALL_R);
+    // El giro visual sigue el giro real (puede no coincidir con la dirección si desliza)
+    const spinSpeed = Math.hypot(b.body.rx, b.body.rz);
+    if (spinSpeed > 0) {
+      tmpAxis.set(b.body.rz, 0, -b.body.rx).divideScalar(spinSpeed);
+      tmpQ.setFromAxisAngle(tmpAxis, (spinSpeed * dt) / BALL_R);
       b.mesh.quaternion.premultiply(tmpQ);
     }
     b.mesh.position.set(b.body.x, BALL_R, b.body.z);
@@ -414,7 +587,7 @@ function updateAimVisuals() {
   const aiming = state === 'aiming' || state === 'charging';
   const c = cueBall().body;
   cue.visible = aiming;
-  guide.visible = objectGuide.visible = aiming;
+  guide.visible = objectGuide.visible = cueGuide.visible = aiming;
   ghost.visible = aiming || state === 'placing';
   powerEl.classList.toggle('visible', state === 'charging');
   shootBtn.disabled = !aiming;
@@ -434,7 +607,7 @@ function updateAimVisuals() {
 
   // Taco
   const pull = BALL_R + 0.012 + power * 0.28;
-  cue.position.set(c.x - dx * pull, BALL_R + 0.004, c.z - dz * pull);
+  cue.position.set(c.x - dx * pull, BALL_R + 0.004 + spin * BALL_R, c.z - dz * pull);
   cue.lookAt(c.x - dx * (pull + 1), BALL_R + 0.12, c.z - dz * (pull + 1));
 
   // Guía hasta la bola fantasma
@@ -449,8 +622,13 @@ function updateAimVisuals() {
     const nz = hit.z - gz;
     const len = Math.hypot(nx, nz) || 1;
     setLine(objectGuide, hit.x, hit.z, hit.x + (nx / len) * 0.25, hit.z + (nz / len) * 0.25);
+    // La blanca sale por la tangente (sin efecto); más corta cuanto más de lleno es el golpe
+    const along = dx * (nx / len) + dz * (nz / len);
+    const tx = dx - along * (nx / len);
+    const tz = dz - along * (nz / len);
+    setLine(cueGuide, gx, gz, gx + tx * 0.25, gz + tz * 0.25);
   } else {
-    objectGuide.visible = false;
+    objectGuide.visible = cueGuide.visible = false;
   }
 }
 
@@ -468,7 +646,7 @@ function respot(ball: Ball) {
     balls.every((b) => b === ball || !b.body.active || Math.hypot(b.body.x - x, b.body.z) > BALL_R * 2.05);
   let x = FOOT_SPOT.x;
   while (!free(x) && x < TABLE_L / 2 - BALL_R) x += BALL_R * 0.5;
-  Object.assign(ball.body, { x, z: 0, vx: 0, vz: 0, active: true });
+  Object.assign(ball.body, { x, z: 0, vx: 0, vz: 0, rx: 0, rz: 0, active: true });
   ball.sinking = null;
   ball.mesh.visible = true;
 }
@@ -512,9 +690,19 @@ function frame() {
   }
 
   updateAimVisuals();
+  updateCameraTween();
+  updateZoom(dt);
   controls.update();
+  // Que el desplazamiento no saque la mesa de la vista
+  controls.target.x = THREE.MathUtils.clamp(controls.target.x, -1.6, 1.6);
+  controls.target.z = THREE.MathUtils.clamp(controls.target.z, -1, 1);
+  controls.target.y = 0;
+  // La niebla oscurece la sala, no la mesa: empieza siempre detrás de ella
+  const camDist = camera.position.distanceTo(controls.target);
+  fog.near = camDist + 1.5;
+  fog.far = camDist + 8;
   // Desde arriba las lámparas taparían la mesa
-  lamps.visible = state === 'menu' || camera.position.y < 1.2;
+  setLampsOpacity(state === 'menu' ? 1 : 1 - THREE.MathUtils.smoothstep(camera.position.y, 1.0, 1.5));
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
@@ -525,6 +713,8 @@ function resize() {
   renderer.setSize(w, h, false);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
+  // Al cambiar el tamaño de la ventana se reencuadra la vista fija actual
+  if (state !== 'menu' && view !== 'cue') setView(view, false);
 }
 window.addEventListener('resize', resize);
 
@@ -538,7 +728,7 @@ document.querySelector('#play')!.addEventListener('click', () => {
   controls.autoRotate = false;
   newGame();
   resize();
-  resetCamera();
+  setView('3d', false);
   if (matchMedia('(pointer: coarse)').matches) showMessage('Toca la mesa para colocar la blanca · dos dedos mueven la cámara');
 });
 

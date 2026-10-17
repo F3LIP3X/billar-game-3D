@@ -15,9 +15,10 @@ npm run dev
 
 - **Ratón**: apuntar
 - **Mantener clic izquierdo**: cargar potencia; soltar para tirar
-- **← / →**: ajuste fino del ángulo (con Shift, más fino)
-- **Clic derecho + arrastrar**: girar la cámara · **Rueda**: zoom
-- **V**: cámara detrás de la bola blanca
+- **Shift + ratón** o **← / →**: ajuste fino del ángulo
+- **↑ / ↓**: efecto (seguir / retroceso)
+- **Clic derecho**: girar la cámara · **Botón central**: desplazar · **Rueda**: zoom suave hacia el cursor
+- **1 / 2 / V** o botones: vistas 3D, 2D (desde arriba) y tras la bola
 
 **Móvil**
 - Toca o desliza un dedo sobre la mesa para apuntar o colocar la blanca

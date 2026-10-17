@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { BALL_R, CUSHION_W, CUSHIONS, POCKETS, RAIL_W, TABLE_L, TABLE_W } from './constants';
+import { cherryTexture, feltTextures } from './textures';
 
 const HALF_L = TABLE_L / 2;
 const HALF_W = TABLE_W / 2;
@@ -95,14 +96,39 @@ function extrudeFlat(shape: THREE.Shape, depth: number, top: number, bevel = 0) 
 export function buildTable(): THREE.Group {
   const table = new THREE.Group();
 
-  const cloth = new THREE.MeshStandardMaterial({ color: 0x15584a, roughness: 0.95 });
-  const cushionCloth = new THREE.MeshStandardMaterial({ color: 0x114a3e, roughness: 0.9 });
+  // Paño de fieltro azul: textura de fibra + brillo "sheen" de tela en vez de reflejo especular
+  const felt = feltTextures();
+  // Las UV del paño van en metros: una tesela de fibra cada 25 cm
+  felt.map.repeat.set(4, 4);
+  felt.bump.repeat.set(4, 4);
+  const feltMaterial = (color: number) =>
+    new THREE.MeshPhysicalMaterial({
+      color,
+      map: felt.map,
+      bumpMap: felt.bump,
+      bumpScale: 0.6,
+      roughness: 1,
+      sheen: 1,
+      sheenRoughness: 0.75,
+      sheenColor: new THREE.Color(0x5a7fc4),
+    });
+  const cloth = feltMaterial(0x1d3f78);
+  const cushionCloth = feltMaterial(0x183668);
+
+  // Cerezo barnizado: veta de la textura + capa de barniz (clearcoat)
+  const cherry = cherryTexture();
+  cherry.repeat.set(1 / 1.2, 1 / 0.35); // 1,2 m de veta a lo largo, 35 cm de ancho
   const wood = new THREE.MeshPhysicalMaterial({
-    color: 0x4a2414,
-    roughness: 0.38,
-    clearcoat: 0.8,
-    clearcoatRoughness: 0.18,
+    map: cherry,
+    roughness: 0.55,
+    clearcoat: 1,
+    clearcoatRoughness: 0.06,
   });
+  // Cuerpo y patas tienen UV de 0 a 1: otra repetición de la misma veta
+  const bodyCherry = cherry.clone();
+  bodyCherry.repeat.set(2, 1);
+  const bodyWood = wood.clone();
+  bodyWood.map = bodyCherry;
   const brass = new THREE.MeshStandardMaterial({ color: 0xc9a25a, metalness: 1, roughness: 0.3 });
   const pocketMat = new THREE.MeshStandardMaterial({ color: 0x050505, roughness: 1, side: THREE.DoubleSide });
 
@@ -178,7 +204,7 @@ export function buildTable(): THREE.Group {
   // Cuerpo y patas
   const body = new THREE.Mesh(
     new THREE.BoxGeometry(2 * railOuterL - 0.08, 0.32, 2 * railOuterW - 0.08),
-    wood,
+    bodyWood,
   );
   body.position.y = -0.36;
   body.castShadow = true;
@@ -187,7 +213,7 @@ export function buildTable(): THREE.Group {
   const legGeo = new THREE.CylinderGeometry(0.07, 0.055, 0.5, 24);
   for (const sx of [-1, 1]) {
     for (const sz of [-1, 1]) {
-      const leg = new THREE.Mesh(legGeo, wood);
+      const leg = new THREE.Mesh(legGeo, bodyWood);
       leg.position.set(sx * (railOuterL - 0.2), -0.77, sz * (railOuterW - 0.15));
       leg.castShadow = true;
       table.add(leg);
@@ -232,7 +258,7 @@ export function buildRoom(scene: THREE.Scene) {
   const lamps = new THREE.Group();
   scene.add(lamps);
   const shadeMat = new THREE.MeshStandardMaterial({
-    color: 0x0f3d2e,
+    color: 0x14284a,
     roughness: 0.5,
     metalness: 0.3,
     side: THREE.DoubleSide,
@@ -265,5 +291,18 @@ export function buildRoom(scene: THREE.Scene) {
   scene.add(key, key.target);
 
   scene.add(new THREE.HemisphereLight(0x3a4a5a, 0x120c08, 0.35));
-  return { lamps };
+  // Materiales con transparencia para poder desvanecer las lámparas sin cortes
+  lamps.traverse((o) => {
+    if (o instanceof THREE.Mesh) {
+      o.material = (o.material as THREE.Material).clone();
+      o.material.transparent = true;
+    }
+  });
+  const setLampsOpacity = (opacity: number) => {
+    lamps.visible = opacity > 0.01;
+    lamps.traverse((o) => {
+      if (o instanceof THREE.Mesh) (o.material as THREE.Material).opacity = opacity;
+    });
+  };
+  return { setLampsOpacity };
 }
