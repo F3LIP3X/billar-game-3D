@@ -9,7 +9,10 @@ import { ballColor, createBallMesh, createCue } from './balls';
 import { evaluateShot, groupOf, type Player, type ShotRecord } from './rules';
 import { sounds, unlockAudio } from './audio';
 
-type State = 'aiming' | 'charging' | 'rolling' | 'placing' | 'over';
+// Línea de cabecera: en el saque (y tras blanca dentro en el saque) la blanca va detrás de ella
+const KITCHEN_X = HEAD_SPOT.x;
+
+type State = 'menu' | 'aiming' | 'charging' | 'rolling' | 'placing' | 'over';
 
 interface Ball {
   n: number;
@@ -48,9 +51,16 @@ controls.mouseButtons = {
   MIDDLE: THREE.MOUSE.DOLLY,
   RIGHT: THREE.MOUSE.ROTATE,
 };
+controls.touches = {
+  ONE: null as unknown as THREE.TOUCH,
+  TWO: THREE.TOUCH.DOLLY_ROTATE,
+};
+// En el menú la cámara gira despacio alrededor de la mesa
+controls.autoRotate = true;
+controls.autoRotateSpeed = 0.6;
 
 scene.add(buildTable());
-buildRoom(scene);
+const { lamps } = buildRoom(scene);
 
 const cue = createCue();
 scene.add(cue);
@@ -68,18 +78,40 @@ const ghost = new THREE.Mesh(
 );
 scene.add(guide, objectGuide, ghost);
 
+// Línea de cabecera y zona de saque, visibles al colocar la blanca para el saque
+const kitchen = new THREE.Group();
+const kitchenArea = new THREE.Mesh(
+  new THREE.PlaneGeometry(TABLE_L / 4, TABLE_W),
+  new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.05, depthWrite: false }),
+);
+kitchenArea.rotation.x = -Math.PI / 2;
+kitchenArea.position.set(-TABLE_L / 2 + TABLE_L / 8, 0.001, 0);
+const headString = new THREE.Line(
+  new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(KITCHEN_X, 0.002, -TABLE_W / 2),
+    new THREE.Vector3(KITCHEN_X, 0.002, TABLE_W / 2),
+  ]),
+  new THREE.LineDashedMaterial({ color: 0xffffff, dashSize: 0.03, gapSize: 0.02, transparent: true, opacity: 0.5 }),
+);
+headString.computeLineDistances();
+kitchen.add(kitchenArea, headString);
+scene.add(kitchen);
+
 // ---------- Estado de juego ----------
 const RACK_ORDER = [1, 9, 2, 10, 8, 3, 11, 4, 12, 5, 6, 13, 14, 7, 15];
 
 let balls: Ball[] = [];
 let players: Player[] = [];
 let current = 0;
-let state: State = 'aiming';
+let state: State = 'menu';
 let aimAngle = 0;
 let power = 0;
 let chargeStart = 0;
 let shot: ShotRecord = { firstHit: null, potted: [] };
 let onTableBefore: number[] = [];
+let isBreak = true;
+let shotIsBreak = false;
+let kitchenOnly = true;
 
 const cueBall = () => balls[0];
 const onTable = () => balls.filter((b) => b.body.active && b.n !== 0).map((b) => b.n);
@@ -108,11 +140,13 @@ function newGame() {
   ];
   current = 0;
   aimAngle = 0;
-  state = 'aiming';
+  state = 'placing'; // saque: bola en mano detrás de la línea de cabecera
+  isBreak = true;
+  kitchenOnly = true;
   overlay.hidden = true;
   syncMeshes(0);
   renderHud();
-  showMessage('Saque de Jugador 1');
+  showMessage('Saque de Jugador 1: coloca la blanca detrás de la línea');
 }
 
 // ---------- HUD ----------
@@ -166,32 +200,72 @@ function pointerOnTable(e: PointerEvent) {
 
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
-canvas.addEventListener('pointermove', (e) => {
+// En táctil: un dedo apunta / mueve la blanca, dos dedos mueven la cámara y se tira con el botón.
+const touches = new Set<number>();
+
+function aimOrPlace(e: PointerEvent) {
   const p = pointerOnTable(e);
   if (!p) return;
   const c = cueBall().body;
   if (state === 'aiming') {
     aimAngle = Math.atan2(p.z - c.z, p.x - c.x);
   } else if (state === 'placing') {
-    c.x = THREE.MathUtils.clamp(p.x, -TABLE_L / 2 + BALL_R, TABLE_L / 2 - BALL_R);
+    const maxX = kitchenOnly ? KITCHEN_X : TABLE_L / 2 - BALL_R;
+    c.x = THREE.MathUtils.clamp(p.x, -TABLE_L / 2 + BALL_R, maxX);
     c.z = THREE.MathUtils.clamp(p.z, -TABLE_W / 2 + BALL_R, TABLE_W / 2 - BALL_R);
   }
+}
+
+canvas.addEventListener('pointermove', (e) => {
+  if (e.pointerType === 'touch' && touches.size > 1) return;
+  aimOrPlace(e);
 });
 
 canvas.addEventListener('pointerdown', (e) => {
   if (e.button !== 0) return;
   unlockAudio();
-  if (state === 'aiming') {
-    state = 'charging';
-    chargeStart = performance.now();
-  } else if (state === 'placing' && placementValid()) {
-    state = 'aiming';
+  if (e.pointerType === 'touch') {
+    touches.add(e.pointerId);
+    if (touches.size === 1) aimOrPlace(e);
+    return;
   }
+  if (state === 'aiming') startCharge();
+  else if (state === 'placing' && placementValid()) state = 'aiming';
 });
 
 window.addEventListener('pointerup', (e) => {
+  if (e.pointerType === 'touch') {
+    const wasSingle = touches.size === 1 && touches.has(e.pointerId);
+    touches.delete(e.pointerId);
+    if (wasSingle && state === 'placing' && placementValid()) state = 'aiming';
+    return;
+  }
   if (e.button === 0 && state === 'charging') shoot();
 });
+window.addEventListener('pointercancel', (e) => touches.delete(e.pointerId));
+
+function startCharge() {
+  state = 'charging';
+  chargeStart = performance.now();
+}
+
+const shootBtn = document.querySelector<HTMLButtonElement>('#shoot-btn')!;
+shootBtn.addEventListener('pointerdown', (e) => {
+  unlockAudio();
+  shootBtn.setPointerCapture(e.pointerId);
+  if (state === 'aiming') startCharge();
+});
+shootBtn.addEventListener('pointerup', () => {
+  if (state === 'charging') shoot();
+});
+shootBtn.addEventListener('contextmenu', (e) => e.preventDefault());
+
+document.querySelectorAll<HTMLButtonElement>('[data-fine]').forEach((btn) =>
+  btn.addEventListener('click', () => {
+    if (state === 'aiming') aimAngle += Number(btn.dataset.fine) * 0.003;
+  }),
+);
+document.querySelector('#view-btn')!.addEventListener('click', () => cameraBehindCue());
 
 window.addEventListener('keydown', (e) => {
   if (state === 'aiming') {
@@ -199,8 +273,30 @@ window.addEventListener('keydown', (e) => {
     if (e.key === 'ArrowLeft') aimAngle -= delta;
     if (e.key === 'ArrowRight') aimAngle += delta;
   }
-  if (e.key === 'v' || e.key === 'V') cameraBehindCue();
+  if ((e.key === 'v' || e.key === 'V') && state !== 'menu') cameraBehindCue();
 });
+
+const bottomBar = document.querySelector<HTMLDivElement>('.bottom')!;
+
+/** Alto de pantalla que ocupa la barra inferior (0 si el HUD está oculto). */
+function bottomBarHeight() {
+  return bottomBar.offsetParent ? window.innerHeight - bottomBar.getBoundingClientRect().top : 0;
+}
+
+function resetCamera() {
+  // Mesa en vertical: cámara centrada detrás de la cabecera, mirando a lo largo.
+  // Se ajusta para que quepa entera en el hueco que deja libre la barra inferior.
+  const h = window.innerHeight;
+  const free = Math.max(0.4, (h - bottomBarHeight()) / h);
+  const tanV = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * free;
+  const freeAspect = camera.aspect / free;
+  const fitHeight = 1.5 / tanV; // medio largo visible con perspectiva
+  const fitWidth = 0.95 / (tanV * freeAspect); // medio ancho con raíles + margen
+  const dist = Math.max(fitHeight, fitWidth);
+  const elev = THREE.MathUtils.degToRad(62);
+  camera.position.set(-dist * Math.cos(elev), dist * Math.sin(elev), 0.001);
+  controls.target.set(0, 0, 0);
+}
 
 function cameraBehindCue() {
   const c = cueBall().body;
@@ -225,13 +321,17 @@ function shoot() {
   sounds.cue(power);
   shot = { firstHit: null, potted: [] };
   onTableBefore = onTable();
+  shotIsBreak = isBreak;
+  isBreak = false;
   state = 'rolling';
   power = 0;
 }
 
 function endShot() {
-  const result = evaluateShot(players, current, shot, onTableBefore);
+  const result = evaluateShot(players, current, shot, onTableBefore, shotIsBreak);
   const cb = cueBall();
+
+  if (result.respotEight) respot(balls[8]);
 
   if (result.winner !== null) {
     state = 'over';
@@ -251,6 +351,9 @@ function endShot() {
       cb.body.x = HEAD_SPOT.x;
       cb.body.z = HEAD_SPOT.z;
     }
+    // Reglas WPA: falta en el saque → bola en mano detrás de la línea; después, en cualquier sitio
+    kitchenOnly = shotIsBreak;
+    if (kitchenOnly) cb.body.x = Math.min(cb.body.x, KITCHEN_X);
     state = 'placing';
   } else {
     state = 'aiming';
@@ -294,6 +397,9 @@ function updateAimVisuals() {
   guide.visible = objectGuide.visible = aiming;
   ghost.visible = aiming || state === 'placing';
   powerEl.classList.toggle('visible', state === 'charging');
+  shootBtn.disabled = !aiming;
+  kitchen.visible = state === 'placing' && kitchenOnly;
+  shootBtn.textContent = state === 'placing' ? 'Toca la mesa para colocar' : 'Mantén para tirar';
 
   if (state === 'placing') {
     ghost.position.set(c.x, BALL_R, c.z);
@@ -336,6 +442,17 @@ function setLine(line: THREE.Line, x0: number, z0: number, x1: number, z1: numbe
   line.computeLineDistances();
 }
 
+/** Recoloca una bola en el punto de pie, o lo más cerca detrás de él si está ocupado. */
+function respot(ball: Ball) {
+  const free = (x: number) =>
+    balls.every((b) => b === ball || !b.body.active || Math.hypot(b.body.x - x, b.body.z) > BALL_R * 2.05);
+  let x = FOOT_SPOT.x;
+  while (!free(x) && x < TABLE_L / 2 - BALL_R) x += BALL_R * 0.5;
+  Object.assign(ball.body, { x, z: 0, vx: 0, vz: 0, active: true });
+  ball.sinking = null;
+  ball.mesh.visible = true;
+}
+
 function nearestPocket(x: number, z: number) {
   return POCKETS.reduce((a, p) => (Math.hypot(p.x - x, p.z - z) < Math.hypot(a.x - x, a.z - z) ? p : a));
 }
@@ -376,6 +493,8 @@ function frame() {
 
   updateAimVisuals();
   controls.update();
+  // Desde arriba las lámparas taparían la mesa
+  lamps.visible = state === 'menu' || camera.position.y < 1.2;
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
@@ -385,10 +504,28 @@ function resize() {
   const h = window.innerHeight;
   renderer.setSize(w, h, false);
   camera.aspect = w / h;
+  // Centra la imagen en la zona que no tapa la barra inferior
+  camera.setViewOffset(w, h, 0, bottomBarHeight() / 2, w, h);
   camera.updateProjectionMatrix();
 }
 window.addEventListener('resize', resize);
 
+const startScreen = document.querySelector<HTMLDivElement>('#start')!;
+const hud = document.querySelector<HTMLDivElement>('#hud')!;
+document.querySelector('#play')!.addEventListener('click', () => {
+  unlockAudio();
+  startScreen.classList.add('leaving');
+  setTimeout(() => (startScreen.hidden = true), 600);
+  hud.hidden = false;
+  controls.autoRotate = false;
+  newGame();
+  resize();
+  resetCamera();
+  if (matchMedia('(pointer: coarse)').matches) showMessage('Toca la mesa para colocar la blanca · dos dedos mueven la cámara');
+});
+
 resize();
 newGame();
+state = 'menu';
+camera.position.set(-2.6, 1.9, 1.8);
 frame();

@@ -15,29 +15,48 @@
   <body>
     <canvas id="scene"></canvas>
 
-    <div id="hud">
-      <header class="scoreboard">
-        <div class="player" data-player="0">
-          <span class="name">Jugador 1</span>
-          <span class="group"></span>
-          <div class="tray"></div>
-        </div>
-        <h1>Billar</h1>
-        <div class="player" data-player="1">
-          <span class="name">Jugador 2</span>
-          <span class="group"></span>
-          <div class="tray"></div>
-        </div>
-      </header>
+    <div id="start">
+      <div class="start-inner">
+        <p class="eyebrow">Bola 8 · 2 jugadores</p>
+        <h1 class="title">Billar <span>3D</span></h1>
+        <button id="play">Jugar</button>
+      </div>
+    </div>
 
+    <div id="hud" hidden>
       <div id="message"></div>
 
-      <div id="power"><div id="power-fill"></div></div>
 
-      <footer class="help">
-        Mueve el ratón para apuntar · Mantén clic para cargar, suelta para tirar · ← → ajuste fino ·
-        Clic derecho para girar cámara · Rueda para zoom · V vista tras la bola
-      </footer>
+      <div class="bottom">
+        <div id="power"><div id="power-fill"></div></div>
+
+        <div id="touch-controls">
+          <div class="fine">
+            <button data-fine="-1" aria-label="Girar a la izquierda">‹</button>
+            <button data-fine="1" aria-label="Girar a la derecha">›</button>
+            <button id="view-btn">Vista</button>
+          </div>
+          <button id="shoot-btn">Mantén para tirar</button>
+        </div>
+
+        <footer class="scoreboard">
+          <div class="player" data-player="0">
+            <span class="name">Jugador 1</span>
+            <span class="group"></span>
+            <div class="tray"></div>
+          </div>
+          <div class="player" data-player="1">
+            <span class="name">Jugador 2</span>
+            <span class="group"></span>
+            <div class="tray"></div>
+          </div>
+        </footer>
+
+        <p class="help">
+          Mueve el ratón para apuntar · Mantén clic para cargar, suelta para tirar · ← → ajuste fino ·
+          Clic derecho para girar cámara · Rueda para zoom · V vista tras la bola
+        </p>
+      </div>
 
       <div id="overlay" hidden>
         <div class="card">

@@ -188,6 +188,8 @@ export function buildRoom(scene: THREE.Scene) {
   scene.add(floor);
 
   // Lámpara colgante
+  const lamps = new THREE.Group();
+  scene.add(lamps);
   const shadeMat = new THREE.MeshStandardMaterial({
     color: 0x0f3d2e,
     roughness: 0.5,
@@ -198,11 +200,11 @@ export function buildRoom(scene: THREE.Scene) {
   for (const x of [-0.75, 0, 0.75]) {
     const shade = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.16, 32, 1, true), shadeMat);
     shade.position.set(x, 1.25, 0);
-    scene.add(shade);
+    lamps.add(shade);
     const bulb = new THREE.Mesh(new THREE.CircleGeometry(0.17, 32), glowMat);
     bulb.rotation.x = Math.PI / 2;
     bulb.position.set(x, 1.172, 0);
-    scene.add(bulb);
+    lamps.add(bulb);
   }
   const bar = new THREE.Mesh(
     new THREE.CylinderGeometry(0.01, 0.01, 1.9, 8),
@@ -210,7 +212,7 @@ export function buildRoom(scene: THREE.Scene) {
   );
   bar.rotation.z = Math.PI / 2;
   bar.position.y = 1.34;
-  scene.add(bar);
+  lamps.add(bar);
 
   const key = new THREE.SpotLight(0xfff1d8, 16, 6, Math.PI / 3.2, 0.55, 1.4);
   key.position.set(0, 1.2, 0);
@@ -222,4 +224,5 @@ export function buildRoom(scene: THREE.Scene) {
   scene.add(key, key.target);
 
   scene.add(new THREE.HemisphereLight(0x3a4a5a, 0x120c08, 0.35));
+  return { lamps };
 }
