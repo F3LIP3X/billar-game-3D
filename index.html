@@ -16,11 +16,15 @@
     <canvas id="scene"></canvas>
 
     <div id="start">
-      <div class="start-inner">
-        <p class="eyebrow">Bola 8 · 2 jugadores</p>
-        <h1 class="title">Billar <span>3D</span></h1>
-        <button id="play" class="btn btn-primary">Jugar</button>
-      </div>
+      <section class="start-panel glass" aria-labelledby="game-title">
+        <div class="emblem" aria-hidden="true"><span>8</span></div>
+        <h1 id="game-title" class="title">Billar <span>3D</span></h1>
+        <p class="lede">Bola 8 para dos jugadores en el mismo dispositivo. Mete tu grupo y cierra con la negra.</p>
+        <div class="start-actions">
+          <button id="play" class="btn btn-primary">Jugar</button>
+          <button id="how-btn" class="btn btn-secondary" aria-haspopup="dialog">Cómo se juega</button>
+        </div>
+      </section>
       <footer class="credits">
         <span>© 2026 Felipe Toledano</span>
         <a href="https://github.com/F3LIP3X" target="_blank" rel="noopener noreferrer">
@@ -32,6 +36,37 @@
           LinkedIn
         </a>
       </footer>
+    </div>
+
+    <div id="how" class="sheet-backdrop" hidden>
+      <div class="sheet glass" role="dialog" aria-modal="true" aria-labelledby="how-title">
+        <header class="sheet-head">
+          <h2 id="how-title">Cómo se juega</h2>
+          <button id="how-close" class="icon-btn" aria-label="Cerrar">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </button>
+        </header>
+        <section>
+          <h3>Reglas</h3>
+          <ol class="rules">
+            <li>Saca desde detrás de la línea: coloca la blanca y rompe el triángulo.</li>
+            <li>La primera bola que metas después del saque decide tu grupo: lisas (1–7) o rayadas (9–15).</li>
+            <li>En cada tiro toca primero una bola de tu grupo. Si metes una tuya, sigues tirando.</li>
+            <li>Si fallas, metes la blanca o tocas primero otra bola, es falta y el rival coloca la blanca donde quiera.</li>
+            <li>Cuando termines tu grupo, mete la 8 para ganar. Meterla antes de tiempo o con falta pierde la partida.</li>
+          </ol>
+        </section>
+        <section>
+          <h3>Controles</h3>
+          <dl class="keys">
+            <dt>Apuntar</dt><dd>Mueve el ratón o toca la mesa</dd>
+            <dt>Tirar</dt><dd>Mantén pulsado para cargar y suelta</dd>
+            <dt>Efecto</dt><dd>↑ ↓ o la bola blanca de la barra inferior</dd>
+            <dt>Cámara</dt><dd>Clic derecho gira, rueda acerca, Ctrl la libera</dd>
+          </dl>
+          <p class="sheet-note">Durante la partida, el botón ? muestra todos los atajos.</p>
+        </section>
+      </div>
     </div>
 
     <div id="hud" hidden>

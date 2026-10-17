@@ -204,6 +204,7 @@ document.querySelector('#to-menu')!.addEventListener('click', () => {
   startScreen.hidden = false;
   startScreen.classList.remove('leaving');
   controls.autoRotate = true;
+  applyMenuOffset();
   moveCamera(new THREE.Vector3(-2.6, 1.9, 1.8), new THREE.Vector3(0, 0, 0), BASE_FOV, true);
 });
 
@@ -986,7 +987,7 @@ function frame() {
   fog.near = camDist + 1.5;
   fog.far = camDist + 8;
   // Desde arriba las lámparas taparían la mesa
-  setLampsOpacity(state === 'menu' ? 1 : lampsOpacity());
+  setLampsOpacity(lampsOpacity());
   renderer.render(scene, camera);
   renderPip(dt);
   requestAnimationFrame(frame);
@@ -1146,12 +1147,25 @@ function prewarmPip() {
   renderer.compile(pipOverlay, pipOverlayCam);
 }
 
+/**
+ * En el menú la mesa se desplaza para no quedar bajo el panel: a la derecha en escritorio y
+ * hacia arriba en móvil (el panel va abajo). Durante la partida no hay desplazamiento.
+ */
+function applyMenuOffset() {
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  if (state !== 'menu') camera.clearViewOffset();
+  else if (w > 600) camera.setViewOffset(w, h, -w * 0.18, 0, w, h);
+  else camera.setViewOffset(w, h, 0, h * 0.22, w, h);
+  camera.updateProjectionMatrix();
+}
+
 function resize() {
   const w = window.innerWidth;
   const h = window.innerHeight;
   renderer.setSize(w, h, false);
   camera.aspect = w / h;
-  camera.updateProjectionMatrix();
+  applyMenuOffset();
   // Al cambiar el tamaño de la ventana se reencuadra la vista fija actual
   if (state !== 'menu' && view !== 'cue') setView(view, false);
 }
@@ -1159,6 +1173,29 @@ window.addEventListener('resize', resize);
 
 const startScreen = document.querySelector<HTMLDivElement>('#start')!;
 const hud = document.querySelector<HTMLDivElement>('#hud')!;
+// Hoja "Cómo se juega": se cierra con la X, con Esc o tocando fuera; el foco vuelve al botón
+const howSheet = document.querySelector<HTMLDivElement>('#how')!;
+const howBtn = document.querySelector<HTMLButtonElement>('#how-btn')!;
+const howClose = document.querySelector<HTMLButtonElement>('#how-close')!;
+function setHow(open: boolean) {
+  if (open === !howSheet.hidden) return;
+  howSheet.hidden = !open;
+  if (open) howClose.focus();
+  else howBtn.focus();
+}
+howBtn.addEventListener('click', () => {
+  unlockAudio();
+  sounds.ui();
+  setHow(true);
+});
+howClose.addEventListener('click', () => setHow(false));
+howSheet.addEventListener('click', (e) => {
+  if (e.target === howSheet) setHow(false);
+});
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') setHow(false);
+});
+
 document.querySelector('#play')!.addEventListener('click', () => {
   unlockAudio();
   startScreen.classList.add('leaving');
@@ -1177,5 +1214,6 @@ prewarmPip();
 newGame();
 state = 'menu';
 controls.autoRotate = true;
+applyMenuOffset();
 camera.position.set(-2.6, 1.9, 1.8);
 frame();
