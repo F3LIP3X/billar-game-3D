@@ -16,7 +16,6 @@ const SAMPLE_FILES = {
   cushion: ['cushion1', 'cushion2', 'cushion3'],
   cue: ['cue1', 'cue2', 'cue3', 'cue4'],
   pocket: ['pocket'],
-  pocketRoll: ['pocket-roll'],
   turn: ['turn'],
   click: ['click'],
   applause: ['applause'],
@@ -103,10 +102,7 @@ export const sounds = {
   ball: (speed: number) => play('ball', loudness(speed / 3) * 1.1),
   cushion: (speed: number) => play('cushion', loudness(speed / 3.5) * 0.9),
   cue: (power: number) => play('cue', 0.35 + power * 0.8, { pitch: 0.03 }),
-  pocket() {
-    play('pocket', 0.9, { pitch: 0.04 });
-    play('pocketRoll', 0.45, { pitch: 0.04, delay: 0.18 });
-  },
+  pocket: () => play('pocket', 0.5, { pitch: 0.04 }),
   turn: () => play('turn', 0.5, { pitch: 0 }),
   /** Falta: dos notas graves descendentes, discretas. */
   foul() {
