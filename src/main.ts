@@ -51,11 +51,14 @@ controls.maxDistance = 20;
 controls.enableZoom = true; // pellizco en táctil; la rueda se gestiona aparte con zoom suave
 controls.screenSpacePanning = false; // desplazar sobre el plano de la mesa
 controls.rotateSpeed = 0.7;
-controls.mouseButtons = {
-  LEFT: null as unknown as THREE.MOUSE,
+const PLAY_BUTTONS = {
+  LEFT: null as unknown as THREE.MOUSE, // el clic izquierdo es para jugar
   MIDDLE: THREE.MOUSE.PAN,
   RIGHT: THREE.MOUSE.ROTATE,
 };
+// Con Ctrl pulsado: cámara libre, el clic izquierdo gira y el derecho desplaza
+const FREE_BUTTONS = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.PAN };
+controls.mouseButtons = { ...PLAY_BUTTONS };
 controls.touches = {
   ONE: null as unknown as THREE.TOUCH,
   TWO: THREE.TOUCH.DOLLY_ROTATE,
@@ -335,13 +338,34 @@ function aimOrPlace(e: PointerEvent, relative: boolean) {
   }
 }
 
+// ---------- Cámara libre (Ctrl) ----------
+let freeCam = false;
+function setFreeCam(on: boolean) {
+  if (on === freeCam || state === 'menu' || state === 'over') return;
+  freeCam = on;
+  controls.mouseButtons = on ? { ...FREE_BUTTONS } : { ...PLAY_BUTTONS };
+  document.body.classList.toggle('free-cam', on);
+  if (on && state === 'charging') {
+    state = 'aiming'; // si estaba cargando el tiro, se cancela
+    power = 0;
+  }
+}
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Control') setFreeCam(true);
+});
+window.addEventListener('keyup', (e) => {
+  if (e.key === 'Control') setFreeCam(false);
+});
+window.addEventListener('blur', () => setFreeCam(false));
+
 canvas.addEventListener('pointermove', (e) => {
+  if (freeCam) return;
   if (e.pointerType === 'touch' && touches.size > 1) return;
   aimOrPlace(e, true);
 });
 
 canvas.addEventListener('pointerdown', (e) => {
-  if (e.button !== 0) return;
+  if (e.button !== 0 || freeCam) return;
   unlockAudio();
   if (e.pointerType === 'touch') {
     touches.add(e.pointerId);

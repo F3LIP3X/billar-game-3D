@@ -18,6 +18,7 @@ npm run dev
 - **Shift + ratón** o **← / →**: ajuste fino del ángulo
 - **↑ / ↓**: efecto (seguir / retroceso)
 - **Clic derecho**: girar la cámara · **Botón central**: desplazar · **Rueda**: zoom suave hacia el cursor
+- **Ctrl** (mantener): cámara libre — arrastrar gira, clic derecho desplaza, rueda zoom; no interactúa con el juego
 - **1 / 2 / V** o botones: vistas 3D, 2D (desde arriba) y tras la bola
 
 **Móvil**
