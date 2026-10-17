@@ -2,6 +2,8 @@
 
 Juego de billar (bola 8) en el navegador. Vite + TypeScript + Three.js, con física propia.
 
+**Jugar online:** https://billar-3d-f3lip3x.web.app
+
 ## Arrancar
 
 ```bash
@@ -46,3 +48,11 @@ npm run dev
 ## Créditos
 
 - Sonidos de golpes, troneras, turno y aplausos: [Pool And Billiards SFX](https://papapleygames.itch.io/pool-and-billiards) de **Suraj Kispotta** (CC0). Recortados y pasados a mono en `public/sounds/`.
+
+## Publicar
+
+El juego está en Firebase Hosting (proyecto `billar-3d-f3lip3x`). Para publicar una versión nueva:
+
+```bash
+npm run deploy
+```
