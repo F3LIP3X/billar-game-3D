@@ -525,3 +525,15 @@ body.free-cam #scene:active { cursor: grabbing; }
 @media (max-width: 600px) {
   #pip { top: 170px; right: 12px; width: 46vw; }
 }
+
+/* ---------- Contador de FPS ---------- */
+#fps {
+  position: fixed;
+  right: 6px;
+  bottom: 4px;
+  font: 600 11px ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--muted);
+  opacity: 0.8;
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+}

@@ -885,7 +885,22 @@ function nearestPocket(x: number, z: number) {
 }
 
 const clock = new THREE.Clock();
+// Contador de FPS (media de cada medio segundo)
+const fpsEl = document.querySelector<HTMLDivElement>('#fps')!;
+let fpsFrames = 0;
+let fpsSince = performance.now();
+function countFps() {
+  fpsFrames++;
+  const now = performance.now();
+  if (now - fpsSince >= 500) {
+    fpsEl.textContent = `${Math.round((fpsFrames * 1000) / (now - fpsSince))} FPS`;
+    fpsFrames = 0;
+    fpsSince = now;
+  }
+}
+
 function frame() {
+  countFps();
   const dt = Math.min(clock.getDelta(), 1 / 30);
 
   if (state === 'charging') {
@@ -995,19 +1010,78 @@ function renderPip(dt: number) {
   pipLook.lerp(new THREE.Vector3(m.x + pipDir.x * 0.15, Math.max(m.y, 0), m.z + pipDir.z * 0.15), k);
   pipCam.lookAt(pipLook);
 
+  // Zona interior del marco (sin el borde de 2 px)
   const r = pipEl.getBoundingClientRect();
-  pipCam.aspect = r.width / r.height;
+  const x = r.left + pipEl.clientLeft;
+  const y = r.top + pipEl.clientTop;
+  const w = pipEl.clientWidth;
+  const h = pipEl.clientHeight;
+  pipCam.aspect = w / h;
   pipCam.updateProjectionMatrix();
-  const y = window.innerHeight - r.bottom; // WebGL cuenta desde abajo
-  renderer.setScissorTest(true);
-  renderer.setScissor(r.left, y, r.width, r.height);
-  renderer.setViewport(r.left, y, r.width, r.height);
+
+  // 1) La escena vista desde la cámara de detalle, a una textura
+  const dpr = renderer.getPixelRatio();
+  if (pipTarget.width !== Math.round(w * dpr) || pipTarget.height !== Math.round(h * dpr)) {
+    pipTarget.setSize(Math.round(w * dpr), Math.round(h * dpr));
+  }
   renderer.shadowMap.autoUpdate = false; // las sombras ya están calculadas en este fotograma
+  renderer.setRenderTarget(pipTarget);
   renderer.render(scene, pipCam);
+  renderer.setRenderTarget(null);
   renderer.shadowMap.autoUpdate = true;
-  renderer.setScissorTest(false);
-  renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
+
+  // 2) Esa textura sobre la pantalla, recortada con esquinas redondeadas como el marco
+  const W = window.innerWidth;
+  const H = window.innerHeight;
+  pipOverlayCam.right = W;
+  pipOverlayCam.top = H;
+  pipOverlayCam.updateProjectionMatrix();
+  pipQuad.position.set(x + w / 2, H - (y + h / 2), 0);
+  pipQuad.scale.set(w, h, 1);
+  pipQuadMat.uniforms.size.value.set(w, h);
+  renderer.autoClear = false;
+  renderer.render(pipOverlay, pipOverlayCam);
+  renderer.autoClear = true;
 }
+
+const pipTarget = new THREE.WebGLRenderTarget(1, 1, { samples: 4 });
+const pipOverlay = new THREE.Scene();
+const pipOverlayCam = new THREE.OrthographicCamera(0, 1, 1, 0, -1, 1);
+const pipQuadMat = new THREE.ShaderMaterial({
+  uniforms: {
+    map: { value: pipTarget.texture },
+    size: { value: new THREE.Vector2(1, 1) },
+    radius: { value: 12 },
+  },
+  vertexShader: /* glsl */ `
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }`,
+  fragmentShader: /* glsl */ `
+    uniform sampler2D map;
+    uniform vec2 size;
+    uniform float radius;
+    varying vec2 vUv;
+    void main() {
+      // Distancia a un rectángulo redondeado (en píxeles) para recortar las esquinas con suavizado
+      vec2 p = (vUv - 0.5) * size;
+      vec2 q = abs(p) - (size * 0.5 - radius);
+      float d = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - radius;
+      float alpha = clamp(0.5 - d, 0.0, 1.0);
+      if (alpha <= 0.0) discard;
+      gl_FragColor = vec4(texture2D(map, vUv).rgb, alpha);
+      #include <tonemapping_fragment>
+      #include <colorspace_fragment>
+    }`,
+  transparent: true,
+  depthTest: false,
+  depthWrite: false,
+});
+pipQuadMat.toneMapped = true;
+const pipQuad = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), pipQuadMat);
+pipOverlay.add(pipQuad);
 
 function resize() {
   const w = window.innerWidth;
