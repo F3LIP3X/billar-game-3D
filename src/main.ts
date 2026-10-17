@@ -9,7 +9,7 @@ import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { BALL_R, FOOT_SPOT, HEAD_SPOT, MAX_SHOT_SPEED, POCKETS, TABLE_L, TABLE_W } from './constants';
 import { castCueRay, isMoving, step, type Body } from './physics';
 import { buildRoom, buildTable } from './table';
-import { ballColor, createBallMesh, createCue } from './balls';
+import { ballColor, createBallMesh, createBlobShadow, createCue } from './balls';
 import { evaluateShot, groupOf, type Player, type ShotRecord } from './rules';
 import { isMuted, setMuted, sounds, unlockAudio } from './audio';
 import { low, quality, rememberLowQuality } from './quality';
@@ -23,19 +23,20 @@ interface Ball {
   n: number;
   body: Body;
   mesh: THREE.Mesh;
+  blob?: THREE.Mesh; // sombra de contacto (solo en calidad baja)
   sinking: { x: number; z: number } | null;
 }
 
 // ---------- Escena ----------
 const canvas = document.querySelector<HTMLCanvasElement>('#scene')!;
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: !low, powerPreference: 'high-performance' });
-renderer.shadowMap.enabled = true;
+renderer.shadowMap.enabled = !low;
 renderer.shadowMap.type = low ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
 
 /** Resolución del lienzo: la nativa con un tope de píxeles totales para no agotar la memoria de la GPU. */
 function pixelRatioFor(w: number, h: number) {
-  const budget = low ? 1_600_000 : 9_000_000;
-  return Math.min(window.devicePixelRatio, 2, Math.sqrt(budget / (w * h)));
+  const budget = low ? 1_300_000 : 9_000_000;
+  return Math.min(window.devicePixelRatio, low ? 1.5 : 2, Math.sqrt(budget / (w * h)));
 }
 
 // Si el navegador le quita los gráficos a la página (memoria o GPU saturada), se baja la calidad
@@ -175,12 +176,17 @@ const cueBall = () => balls[0];
 const onTable = () => balls.filter((b) => b.body.active && b.n !== 0).map((b) => b.n);
 
 function newGame() {
-  for (const b of balls) scene.remove(b.mesh);
+  for (const b of balls) {
+    scene.remove(b.mesh);
+    if (b.blob) scene.remove(b.blob);
+  }
   balls = [];
   const add = (n: number, x: number, z: number) => {
     const mesh = createBallMesh(n);
     scene.add(mesh);
-    balls[n] = { n, body: { id: n, x, z, vx: 0, vz: 0, rx: 0, rz: 0, active: true }, mesh, sinking: null };
+    const blob = low ? createBlobShadow() : undefined;
+    if (blob) scene.add(blob);
+    balls[n] = { n, body: { id: n, x, z, vx: 0, vz: 0, rx: 0, rz: 0, active: true }, mesh, blob, sinking: null };
   };
 
   add(0, HEAD_SPOT.x, HEAD_SPOT.z);
@@ -853,6 +859,10 @@ const tmpAxis = new THREE.Vector3();
 
 function syncMeshes(dt: number) {
   for (const b of balls) {
+    if (b.blob) {
+      b.blob.visible = b.mesh.visible && b.body.active && !b.sinking;
+      b.blob.position.set(b.mesh.position.x, 0.0015, b.mesh.position.z);
+    }
     if (b.sinking) {
       b.mesh.position.x += (b.sinking.x - b.mesh.position.x) * Math.min(1, dt * 10);
       b.mesh.position.z += (b.sinking.z - b.mesh.position.z) * Math.min(1, dt * 10);
@@ -956,7 +966,7 @@ const loadedAt = performance.now();
 let slowWindows = 0;
 let fastWindows = 0;
 let lastDrop = 0;
-let degradeStep = 0;
+let degradeStep = low ? 2 : 0; // en calidad baja ya no hay reflejos ni sombras
 const MIN_SCALE = 0.55;
 
 /** Si faltan recursos para este equipo: primero se baja la resolución y, en el mínimo, se quitan reflejos y sombras. */
@@ -1101,6 +1111,7 @@ const pipDir = new THREE.Vector3(1, 0, 0);
 const pipLook = new THREE.Vector3();
 
 function startPip(n: number) {
+  if (low) return; // vuelve a dibujar toda la escena: no compensa en móvil
   if (shotIsBreak) return; // en el saque no: hasta que el triángulo esté roto
   pipBall = balls[n];
   pipLinger = 1.2;

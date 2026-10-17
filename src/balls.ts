@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { BALL_R } from './constants';
+import { low } from './quality';
 
 export const BALL_COLORS: Record<number, string> = {
   1: '#f2c230',
@@ -60,15 +61,12 @@ function makeTexture(n: number): THREE.CanvasTexture {
   return tex;
 }
 
-const geometry = new THREE.SphereGeometry(BALL_R, 48, 32);
+const geometry = low ? new THREE.SphereGeometry(BALL_R, 24, 16) : new THREE.SphereGeometry(BALL_R, 48, 32);
 
 export function createBallMesh(n: number): THREE.Mesh {
-  const mat = new THREE.MeshPhysicalMaterial({
-    map: makeTexture(n),
-    roughness: 0.12,
-    clearcoat: 1,
-    clearcoatRoughness: 0.05,
-  });
+  const mat = low
+    ? new THREE.MeshStandardMaterial({ map: makeTexture(n), roughness: 0.3 })
+    : new THREE.MeshPhysicalMaterial({ map: makeTexture(n), roughness: 0.12, clearcoat: 1, clearcoatRoughness: 0.05 });
   const mesh = new THREE.Mesh(geometry, mat);
   mesh.castShadow = true;
   // orientación aleatoria para que no parezcan todas iguales
@@ -90,7 +88,9 @@ export function createCue(): THREE.Group {
   for (const [r0, r1, l, color] of parts) {
     const m = new THREE.Mesh(
       new THREE.CylinderGeometry(r0, r1, l, 24),
-      new THREE.MeshPhysicalMaterial({ color, roughness: 0.35, clearcoat: 0.6 }),
+      low
+        ? new THREE.MeshStandardMaterial({ color, roughness: 0.4 })
+        : new THREE.MeshPhysicalMaterial({ color, roughness: 0.35, clearcoat: 0.6 }),
     );
     m.rotation.x = Math.PI / 2; // eje del cilindro a lo largo de +z
     m.position.z = z + l / 2;
@@ -99,4 +99,31 @@ export function createCue(): THREE.Group {
     z += l;
   }
   return cue;
+}
+
+/**
+ * Sombra de contacto dibujada (un círculo difuso bajo la bola). En calidad baja sustituye a las
+ * sombras reales, que obligan a dibujar la escena otra vez desde la luz.
+ */
+let blobTexture: THREE.CanvasTexture | null = null;
+export function createBlobShadow(): THREE.Mesh {
+  if (!blobTexture) {
+    const c = document.createElement('canvas');
+    c.width = c.height = 64;
+    const g = c.getContext('2d')!;
+    const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+    grad.addColorStop(0, 'rgba(0,0,0,0.55)');
+    grad.addColorStop(0.5, 'rgba(0,0,0,0.3)');
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 64, 64);
+    blobTexture = new THREE.CanvasTexture(c);
+  }
+  const mesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(BALL_R * 3.4, BALL_R * 3.4),
+    new THREE.MeshBasicMaterial({ map: blobTexture, transparent: true, depthWrite: false }),
+  );
+  mesh.rotation.x = -Math.PI / 2;
+  mesh.renderOrder = 1;
+  return mesh;
 }

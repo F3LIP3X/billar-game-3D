@@ -118,9 +118,9 @@ export function buildTable(): THREE.Group {
   // Las UV del paño van en metros: una tesela de fibra cada 25 cm
   felt.map.repeat.set(4, 4);
   felt.bump.repeat.set(4, 4);
-  const feltMaterial = (color: number) =>
+  const feltMaterial = (color: number): THREE.MeshStandardMaterial | THREE.MeshLambertMaterial =>
     low
-      ? new THREE.MeshStandardMaterial({ color, map: felt.map, bumpMap: felt.bump, bumpScale: 0.6, roughness: 1 })
+      ? new THREE.MeshLambertMaterial({ color, map: felt.map })
       : new THREE.MeshPhysicalMaterial({
           color,
           map: felt.map,
@@ -137,8 +137,8 @@ export function buildTable(): THREE.Group {
   // Cerezo barnizado: veta de la textura + capa de barniz (clearcoat)
   const cherry = cherryTexture();
   cherry.repeat.set(1 / 1.2, 1 / 0.35); // 1,2 m de veta a lo largo, 35 cm de ancho
-  const wood: THREE.MeshStandardMaterial = low
-    ? new THREE.MeshStandardMaterial({ map: cherry, roughness: 0.4 })
+  const wood: THREE.MeshStandardMaterial | THREE.MeshLambertMaterial = low
+    ? new THREE.MeshLambertMaterial({ map: cherry })
     : new THREE.MeshPhysicalMaterial({ map: cherry, roughness: 0.55, clearcoat: 1, clearcoatRoughness: 0.06 });
   // Cuerpo y patas tienen UV de 0 a 1: otra repetición de la misma veta
   const bodyCherry = cherry.clone();
@@ -295,13 +295,14 @@ export function buildRoom(scene: THREE.Scene) {
   const key = new THREE.SpotLight(0xfff1d8, 16, 6, Math.PI / 3.2, 0.55, 1.4);
   key.position.set(0, 1.2, 0);
   key.target.position.set(0, 0, 0);
-  key.castShadow = true;
+  key.castShadow = !low;
   key.shadow.mapSize.set(low ? 1024 : 2048, low ? 1024 : 2048);
   key.shadow.bias = -0.0002;
   key.shadow.radius = 4;
   scene.add(key, key.target);
 
-  scene.add(new THREE.HemisphereLight(0x3a4a5a, 0x120c08, 0.35));
+  // Sin reflejos de entorno (calidad baja) hace falta algo más de luz ambiente
+  scene.add(new THREE.HemisphereLight(0x3a4a5a, 0x120c08, low ? 0.6 : 0.35));
   // Materiales con transparencia para poder desvanecer las lámparas sin cortes
   lamps.traverse((o) => {
     if (o instanceof THREE.Mesh) {
