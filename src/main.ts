@@ -996,6 +996,7 @@ const pipDir = new THREE.Vector3(1, 0, 0);
 const pipLook = new THREE.Vector3();
 
 function startPip(n: number) {
+  if (shotIsBreak) return; // en el saque no: hasta que el triángulo esté roto
   pipBall = balls[n];
   pipLinger = 1.2;
   pipLabel.textContent = `Bola ${n}`;
@@ -1103,6 +1104,18 @@ pipQuadMat.toneMapped = true;
 const pipQuad = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), pipQuadMat);
 pipOverlay.add(pipQuad);
 
+/** Prepara el recuadro al cargar (texturas y shaders) para que no dé un tirón la primera vez que se enciende. */
+function prewarmPip() {
+  const dpr = renderer.getPixelRatio();
+  pipTarget.setSize(Math.round(320 * dpr), Math.round(200 * dpr));
+  pipCam.position.set(0, 0.5, 1);
+  pipCam.lookAt(0, 0, 0);
+  renderer.setRenderTarget(pipTarget);
+  renderer.render(scene, pipCam);
+  renderer.setRenderTarget(null);
+  renderer.compile(pipOverlay, pipOverlayCam);
+}
+
 function resize() {
   const w = window.innerWidth;
   const h = window.innerHeight;
@@ -1130,6 +1143,7 @@ document.querySelector('#play')!.addEventListener('click', () => {
 });
 
 resize();
+prewarmPip();
 newGame();
 state = 'menu';
 controls.autoRotate = true;
