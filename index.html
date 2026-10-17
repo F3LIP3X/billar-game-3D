@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Billar 3D</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <canvas id="scene"></canvas>
+
+    <div id="hud">
+      <header class="scoreboard">
+        <div class="player" data-player="0">
+          <span class="name">Jugador 1</span>
+          <span class="group"></span>
+          <div class="tray"></div>
+        </div>
+        <h1>Billar</h1>
+        <div class="player" data-player="1">
+          <span class="name">Jugador 2</span>
+          <span class="group"></span>
+          <div class="tray"></div>
+        </div>
+      </header>
+
+      <div id="message"></div>
+
+      <div id="power"><div id="power-fill"></div></div>
+
+      <footer class="help">
+        Mueve el ratón para apuntar · Mantén clic para cargar, suelta para tirar · ← → ajuste fino ·
+        Clic derecho para girar cámara · Rueda para zoom · V vista tras la bola
+      </footer>
+
+      <div id="overlay" hidden>
+        <div class="card">
+          <h2 id="overlay-title"></h2>
+          <button id="restart">Jugar otra vez</button>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

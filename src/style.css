@@ -1,0 +1,188 @@
+:root {
+  --ink: #f4ecdc;
+  --muted: #b8ab93;
+  --brass: #c9a25a;
+  --panel: rgba(18, 14, 11, 0.72);
+  --line: rgba(201, 162, 90, 0.35);
+  font-family: Inter, system-ui, sans-serif;
+  color: var(--ink);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #0c0a09;
+}
+
+#scene {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+}
+
+#hud {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+.scoreboard {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 24px;
+  width: min(760px, calc(100% - 32px));
+  padding: 12px 20px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  backdrop-filter: blur(8px);
+}
+
+.scoreboard h1 {
+  margin: 0;
+  font-family: Fraunces, Georgia, serif;
+  font-size: 22px;
+  letter-spacing: 0.04em;
+  color: var(--brass);
+}
+
+.player {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  opacity: 0.5;
+  transition: opacity 0.3s;
+}
+.player[data-player='1'] { align-items: flex-end; text-align: right; }
+.player.active { opacity: 1; }
+.player.active .name::before {
+  content: '';
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 7px;
+  border-radius: 50%;
+  background: var(--brass);
+  vertical-align: middle;
+}
+.name { font-weight: 600; font-size: 15px; }
+.group { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+
+.tray { display: flex; gap: 4px; flex-wrap: wrap; min-height: 20px; }
+.chip {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 10px;
+  font-weight: 600;
+  color: #151515;
+  background: radial-gradient(circle at center, #f6f1e4 0 38%, var(--c) 40%);
+}
+.chip.stripe {
+  background:
+    radial-gradient(circle at center, #f6f1e4 0 38%, transparent 40%),
+    linear-gradient(#f6f1e4 0 22%, var(--c) 22% 78%, #f6f1e4 78%);
+}
+.chip.potted { opacity: 0.2; }
+
+#message {
+  position: absolute;
+  top: 120px;
+  left: 50%;
+  transform: translate(-50%, -8px);
+  padding: 10px 18px;
+  border-radius: 999px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  font-size: 14px;
+  opacity: 0;
+  transition: opacity 0.3s, transform 0.3s;
+  white-space: nowrap;
+  max-width: calc(100% - 32px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#message.visible { opacity: 1; transform: translate(-50%, 0); }
+
+#power {
+  position: absolute;
+  bottom: 64px;
+  left: 50%;
+  width: min(320px, calc(100% - 32px));
+  height: 10px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+#power.visible { opacity: 1; }
+#power-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #6fbf73, #e9c46a, #e76f51);
+  transform-origin: left;
+  transform: scaleX(0);
+}
+
+.help {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: calc(100% - 32px);
+  text-align: center;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+#overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.55);
+  pointer-events: auto;
+}
+#overlay[hidden] { display: none; }
+.card {
+  padding: 32px 40px;
+  border-radius: 18px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  text-align: center;
+}
+.card h2 {
+  margin: 0 0 20px;
+  font-family: Fraunces, Georgia, serif;
+  font-size: 26px;
+}
+.card button {
+  font: 600 15px Inter, system-ui, sans-serif;
+  padding: 10px 22px;
+  border-radius: 999px;
+  border: none;
+  background: var(--brass);
+  color: #1b1209;
+  cursor: pointer;
+}
+.card button:hover { filter: brightness(1.1); }
+
+@media (max-width: 600px) {
+  .scoreboard { gap: 12px; padding: 10px 12px; }
+  .scoreboard h1 { font-size: 16px; }
+  .help { display: none; }
+}
