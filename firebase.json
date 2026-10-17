@@ -3,27 +3,65 @@
     {
       "target": "juego",
       "public": "dist",
-      "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**"
+      ],
       "headers": [
         {
           "source": "/assets/**",
-          "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "public, max-age=31536000, immutable"
+            }
+          ]
         },
         {
           "source": "/sounds/**",
-          "headers": [{ "key": "Cache-Control", "value": "public, max-age=86400" }]
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "public, max-age=86400"
+            }
+          ]
+        },
+        {
+          "source": "/textures/**",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "public, max-age=86400"
+            }
+          ]
         },
         {
           "source": "/index.html",
-          "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-cache"
+            }
+          ]
         }
       ]
     },
     {
       "target": "antigua",
       "public": "dist",
-      "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
-      "redirects": [{ "source": "**", "destination": "https://billar3d.web.app", "type": 301 }]
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**"
+      ],
+      "redirects": [
+        {
+          "source": "**",
+          "destination": "https://billar3d.web.app",
+          "type": 301
+        }
+      ]
     }
   ]
 }

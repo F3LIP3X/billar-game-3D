@@ -141,7 +141,7 @@ export function buildTable(): THREE.Group {
     ? new THREE.MeshLambertMaterial({ map: cherry, color: 0xb59a8c }) // oscurece la veta, como el barniz
     : new THREE.MeshPhysicalMaterial({ map: cherry, roughness: 0.55, clearcoat: 1, clearcoatRoughness: 0.06 });
   // Cuerpo y patas tienen UV de 0 a 1: otra repetición de la misma veta
-  const bodyCherry = cherry.clone();
+  const bodyCherry = cherryTexture();
   bodyCherry.repeat.set(2, 1);
   const bodyWood = wood.clone();
   bodyWood.map = bodyCherry;

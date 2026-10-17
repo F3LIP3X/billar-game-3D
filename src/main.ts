@@ -983,7 +983,7 @@ const clock = new THREE.Clock();
 const fpsEl = document.querySelector<HTMLDivElement>('#fps')!;
 let fpsFrames = 0;
 let fpsSince = performance.now();
-const loadedAt = performance.now();
+let loadedAt = performance.now();
 let slowWindows = 0;
 let fastWindows = 0;
 let lastDrop = 0;
@@ -1339,7 +1339,6 @@ if (touch) {
 }
 
 resize();
-if (!low) prewarmPip();
 document.querySelector('#gfx-reload')!.addEventListener('click', () => location.reload());
 if (new URLSearchParams(location.search).has('debug')) {
   const gl = renderer.getContext();
@@ -1353,4 +1352,19 @@ state = 'menu';
 controls.autoRotate = true;
 applyMenuOffset();
 camera.position.set(-2.6, 1.9, 1.8);
-frame();
+
+// Los shaders se compilan en segundo plano (KHR_parallel_shader_compile): el menú ya responde
+// mientras tanto y el primer fotograma no se queda esperando a la compilación.
+const compileStart = performance.now();
+renderer
+  .compileAsync(scene, camera)
+  .catch(() => {})
+  .finally(() => {
+    console.info(`Shaders compilados en ${Math.round(performance.now() - compileStart)} ms`);
+    clock.getDelta(); // que el primer fotograma no cuente la espera
+    loadedAt = performance.now();
+    frame();
+    console.info(`Primer fotograma a los ${Math.round(performance.now())} ms desde que se pidió la página`);
+    // El recuadro de detalle se prepara un poco después, con el menú ya en marcha
+    if (!low) setTimeout(prewarmPip, 2500);
+  });

@@ -17,33 +17,36 @@ export const ballColor = (n: number) => (n === 0 ? '#f6f1e4' : BALL_COLORS[n > 8
 
 function makeTexture(n: number): THREE.CanvasTexture {
   const c = document.createElement('canvas');
-  c.width = 1024;
-  c.height = 512;
+  // En calidad baja la mitad de resolución: son 16 texturas y las bolas ocupan poco en pantalla
+  const k = low ? 0.5 : 1;
+  c.width = 1024 * k;
+  c.height = 512 * k;
   const g = c.getContext('2d')!;
+  g.scale(k, k); // el resto se dibuja con las medidas de 1024x512
   const ivory = '#f6f1e4';
 
   if (n === 0) {
     g.fillStyle = ivory;
-    g.fillRect(0, 0, c.width, c.height);
+    g.fillRect(0, 0, 1024, 512);
     // punto rojo de referencia para ver el giro
     for (const u of [0.25, 0.75]) {
       g.fillStyle = '#c0392b';
       g.beginPath();
-      g.arc(u * c.width, c.height / 2, 14, 0, Math.PI * 2);
+      g.arc(u * 1024, 256, 14, 0, Math.PI * 2);
       g.fill();
     }
   } else {
     const color = ballColor(n);
     const stripe = n > 8;
     g.fillStyle = stripe ? ivory : color;
-    g.fillRect(0, 0, c.width, c.height);
+    g.fillRect(0, 0, 1024, 512);
     if (stripe) {
       g.fillStyle = color;
-      g.fillRect(0, c.height * 0.27, c.width, c.height * 0.46);
+      g.fillRect(0, 512 * 0.27, 1024, 512 * 0.46);
     }
     for (const u of [0.25, 0.75]) {
-      const cx = u * c.width;
-      const cy = c.height / 2;
+      const cx = u * 1024;
+      const cy = 256;
       g.fillStyle = ivory;
       g.beginPath();
       g.ellipse(cx, cy, 64, 70, 0, 0, Math.PI * 2);
