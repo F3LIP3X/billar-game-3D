@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { BALL_R, CUSHION_W, CUSHIONS, POCKETS, RAIL_W, TABLE_L, TABLE_W } from './constants';
 import { cherryTexture, feltTextures } from './textures';
+import { low } from './quality';
 
 const HALF_L = TABLE_L / 2;
 const HALF_W = TABLE_W / 2;
@@ -118,28 +119,27 @@ export function buildTable(): THREE.Group {
   felt.map.repeat.set(4, 4);
   felt.bump.repeat.set(4, 4);
   const feltMaterial = (color: number) =>
-    new THREE.MeshPhysicalMaterial({
-      color,
-      map: felt.map,
-      bumpMap: felt.bump,
-      bumpScale: 0.6,
-      roughness: 1,
-      sheen: 1,
-      sheenRoughness: 0.75,
-      sheenColor: new THREE.Color(0x5a7fc4),
-    });
+    low
+      ? new THREE.MeshStandardMaterial({ color, map: felt.map, bumpMap: felt.bump, bumpScale: 0.6, roughness: 1 })
+      : new THREE.MeshPhysicalMaterial({
+          color,
+          map: felt.map,
+          bumpMap: felt.bump,
+          bumpScale: 0.6,
+          roughness: 1,
+          sheen: 1,
+          sheenRoughness: 0.75,
+          sheenColor: new THREE.Color(0x5a7fc4),
+        });
   const cloth = feltMaterial(0x1d3f78);
   const cushionCloth = feltMaterial(0x183668);
 
   // Cerezo barnizado: veta de la textura + capa de barniz (clearcoat)
   const cherry = cherryTexture();
   cherry.repeat.set(1 / 1.2, 1 / 0.35); // 1,2 m de veta a lo largo, 35 cm de ancho
-  const wood = new THREE.MeshPhysicalMaterial({
-    map: cherry,
-    roughness: 0.55,
-    clearcoat: 1,
-    clearcoatRoughness: 0.06,
-  });
+  const wood: THREE.MeshStandardMaterial = low
+    ? new THREE.MeshStandardMaterial({ map: cherry, roughness: 0.4 })
+    : new THREE.MeshPhysicalMaterial({ map: cherry, roughness: 0.55, clearcoat: 1, clearcoatRoughness: 0.06 });
   // Cuerpo y patas tienen UV de 0 a 1: otra repetición de la misma veta
   const bodyCherry = cherry.clone();
   bodyCherry.repeat.set(2, 1);
@@ -296,7 +296,7 @@ export function buildRoom(scene: THREE.Scene) {
   key.position.set(0, 1.2, 0);
   key.target.position.set(0, 0, 0);
   key.castShadow = true;
-  key.shadow.mapSize.set(2048, 2048);
+  key.shadow.mapSize.set(low ? 1024 : 2048, low ? 1024 : 2048);
   key.shadow.bias = -0.0002;
   key.shadow.radius = 4;
   scene.add(key, key.target);

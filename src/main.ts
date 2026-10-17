@@ -1,3 +1,4 @@
+import './debug';
 import './style.css';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -11,6 +12,7 @@ import { buildRoom, buildTable } from './table';
 import { ballColor, createBallMesh, createCue } from './balls';
 import { evaluateShot, groupOf, type Player, type ShotRecord } from './rules';
 import { isMuted, setMuted, sounds, unlockAudio } from './audio';
+import { low, quality, rememberLowQuality } from './quality';
 
 // Línea de cabecera: en el saque (y tras blanca dentro en el saque) la blanca va detrás de ella
 const KITCHEN_X = HEAD_SPOT.x;
@@ -26,10 +28,28 @@ interface Ball {
 
 // ---------- Escena ----------
 const canvas = document.querySelector<HTMLCanvasElement>('#scene')!;
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: !low, powerPreference: 'high-performance' });
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.type = low ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
+
+/** Resolución del lienzo: la nativa con un tope de píxeles totales para no agotar la memoria de la GPU. */
+function pixelRatioFor(w: number, h: number) {
+  const budget = low ? 1_600_000 : 9_000_000;
+  return Math.min(window.devicePixelRatio, 2, Math.sqrt(budget / (w * h)));
+}
+
+// Si el navegador le quita los gráficos a la página (memoria o GPU saturada), se baja la calidad
+// y se recarga una vez; si ya estaba en calidad baja, se avisa en pantalla.
+canvas.addEventListener('webglcontextlost', (e) => {
+  e.preventDefault();
+  console.warn('webglcontextlost');
+  if (!low) {
+    rememberLowQuality();
+    location.reload();
+  } else {
+    document.querySelector<HTMLElement>('#gfx-error')!.hidden = false;
+  }
+});
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.05;
 
@@ -1072,7 +1092,7 @@ function renderPip(dt: number) {
   pipCam.updateProjectionMatrix();
 
   // 1) La escena vista desde la cámara de detalle, a una textura
-  const dpr = renderer.getPixelRatio();
+  const dpr = pipScale();
   if (pipTarget.width !== Math.round(w * dpr) || pipTarget.height !== Math.round(h * dpr)) {
     pipTarget.setSize(Math.round(w * dpr), Math.round(h * dpr));
   }
@@ -1096,7 +1116,9 @@ function renderPip(dt: number) {
   renderer.autoClear = true;
 }
 
-const pipTarget = new THREE.WebGLRenderTarget(1, 1, { samples: 4 });
+const pipTarget = new THREE.WebGLRenderTarget(1, 1, { samples: low ? 0 : 4 });
+/** Resolución del recuadro de detalle: en calidad baja, sin multiplicar por la densidad de píxeles. */
+const pipScale = () => (low ? 1 : renderer.getPixelRatio());
 const pipOverlay = new THREE.Scene();
 const pipOverlayCam = new THREE.OrthographicCamera(0, 1, 1, 0, -1, 1);
 const pipQuadMat = new THREE.ShaderMaterial({
@@ -1137,7 +1159,7 @@ pipOverlay.add(pipQuad);
 
 /** Prepara el recuadro al cargar (texturas y shaders) para que no dé un tirón la primera vez que se enciende. */
 function prewarmPip() {
-  const dpr = renderer.getPixelRatio();
+  const dpr = pipScale();
   pipTarget.setSize(Math.round(320 * dpr), Math.round(200 * dpr));
   pipCam.position.set(0, 0.5, 1);
   pipCam.lookAt(0, 0, 0);
@@ -1163,6 +1185,7 @@ function applyMenuOffset() {
 function resize() {
   const w = window.innerWidth;
   const h = window.innerHeight;
+  renderer.setPixelRatio(pixelRatioFor(w, h));
   renderer.setSize(w, h, false);
   camera.aspect = w / h;
   applyMenuOffset();
@@ -1211,6 +1234,14 @@ document.querySelector('#play')!.addEventListener('click', () => {
 
 resize();
 prewarmPip();
+document.querySelector('#gfx-reload')!.addEventListener('click', () => location.reload());
+if (new URLSearchParams(location.search).has('debug')) {
+  const gl = renderer.getContext();
+  const info = gl.getExtension('WEBGL_debug_renderer_info');
+  console.info(
+    `GPU: ${info ? gl.getParameter(info.UNMASKED_RENDERER_WEBGL) : 'n/d'} · calidad ${quality} · ratio ${renderer.getPixelRatio().toFixed(2)} · ${innerWidth}x${innerHeight}`,
+  );
+}
 newGame();
 state = 'menu';
 controls.autoRotate = true;

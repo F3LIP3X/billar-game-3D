@@ -620,6 +620,22 @@ body.free-cam #scene:active { cursor: grabbing; }
   background: var(--c, var(--ink));
 }
 
+/* ---------- Error de gráficos ---------- */
+#gfx-error {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  z-index: 10;
+  transform: translate(-50%, -50%);
+  width: min(360px, calc(100% - 32px));
+  padding: 24px;
+  border-radius: 24px;
+  text-align: center;
+  background: var(--surface-solid);
+}
+#gfx-error[hidden] { display: none; }
+#gfx-error p { margin: 0 0 18px; font-size: 15px; line-height: 1.45; color: var(--ink-2); }
+
 /* ---------- FPS ---------- */
 #fps {
   position: fixed;
