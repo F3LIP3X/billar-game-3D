@@ -1,4 +1,4 @@
-import { BALL_R, CORNER_GAP, POCKETS, SIDE_GAP, TABLE_L, TABLE_W } from './constants';
+import { BALL_R, CUSHION_W, CUSHIONS, POCKETS, TABLE_L, TABLE_W } from './constants';
 
 export interface Body {
   id: number;
@@ -71,31 +71,38 @@ function integrate(b: Body, h: number) {
   b.z += b.vz * h;
 }
 
+// Segmentos contra los que rebota la bola: la cara de cada banda y sus dos bocas.
+const SEGMENTS = CUSHIONS.flatMap(([a, b, bb, ba]) => [
+  [a, b],
+  [b, bb],
+  [ba, a],
+]);
+
 function collideCushions(b: Body, events: StepEvents) {
-  const inCornerMouthX = Math.abs(b.z) > HALF_W - CORNER_GAP;
-  const inCornerMouthZ = Math.abs(b.x) > HALF_L - CORNER_GAP;
-  const inSideMouth = Math.abs(b.x) < SIDE_GAP;
+  for (const [[x0, z0], [x1, z1]] of SEGMENTS) {
+    // Punto del segmento más cercano al centro de la bola
+    const sx = x1 - x0;
+    const sz = z1 - z0;
+    const t = Math.max(0, Math.min(1, ((b.x - x0) * sx + (b.z - z0) * sz) / (sx * sx + sz * sz)));
+    const dx = b.x - (x0 + sx * t);
+    const dz = b.z - (z0 + sz * t);
+    const dist = Math.hypot(dx, dz);
+    if (dist >= BALL_R || dist === 0) continue;
 
-  // Bandas cortas (eje x)
-  if (!inCornerMouthX && Math.abs(b.x) > HALF_L - BALL_R) {
-    const sign = Math.sign(b.x);
-    if (b.vx * sign > 0) {
-      events.cushionHits.push(Math.abs(b.vx));
-      b.vx = -b.vx * CUSHION_RESTITUTION;
-      b.vz *= 0.95;
-    }
-    b.x = sign * (HALF_L - BALL_R);
-  }
+    const nx = dx / dist;
+    const nz = dz / dist;
+    b.x += nx * (BALL_R - dist);
+    b.z += nz * (BALL_R - dist);
 
-  // Bandas largas (eje z)
-  if (!inCornerMouthZ && !inSideMouth && Math.abs(b.z) > HALF_W - BALL_R) {
-    const sign = Math.sign(b.z);
-    if (b.vz * sign > 0) {
-      events.cushionHits.push(Math.abs(b.vz));
-      b.vz = -b.vz * CUSHION_RESTITUTION;
-      b.vx *= 0.95;
+    const vn = b.vx * nx + b.vz * nz;
+    if (vn < 0) {
+      events.cushionHits.push(-vn);
+      // Rebote con pérdida en la normal y algo de rozamiento en la tangente
+      const tx = b.vx - vn * nx;
+      const tz = b.vz - vn * nz;
+      b.vx = tx * 0.95 - vn * CUSHION_RESTITUTION * nx;
+      b.vz = tz * 0.95 - vn * CUSHION_RESTITUTION * nz;
     }
-    b.z = sign * (HALF_W - BALL_R);
   }
 }
 
@@ -103,8 +110,8 @@ function checkPocket(b: Body) {
   for (const p of POCKETS) {
     if (Math.hypot(b.x - p.x, b.z - p.z) < p.r) return true;
   }
-  // Red de seguridad: si se ha colado por una boca y salido de la mesa, cuenta como metida.
-  return Math.abs(b.x) > HALF_L + BALL_R * 2 || Math.abs(b.z) > HALF_W + BALL_R * 2;
+  // Si ha pasado la línea del raíl solo puede estar dentro de una tronera
+  return Math.abs(b.x) > HALF_L + CUSHION_W || Math.abs(b.z) > HALF_W + CUSHION_W;
 }
 
 function collideBalls(a: Body, b: Body, events: StepEvents) {

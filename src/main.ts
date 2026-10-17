@@ -283,19 +283,39 @@ function bottomBarHeight() {
   return bottomBar.offsetParent ? window.innerHeight - bottomBar.getBoundingClientRect().top : 0;
 }
 
+// Esquinas de la mesa (con raíles) que tienen que verse enteras en la vista inicial
+const TABLE_CORNERS = [-1, 1].flatMap((sx) =>
+  [-1, 1].map((sz) => new THREE.Vector3(sx * (TABLE_L / 2 + 0.24), 0.05, sz * (TABLE_W / 2 + 0.24))),
+);
+
 function resetCamera() {
-  // Mesa en vertical: cámara centrada detrás de la cabecera, mirando a lo largo.
-  // Se ajusta para que quepa entera en el hueco que deja libre la barra inferior.
+  // Mesa en vertical, cámara centrada detrás de la cabecera y algo baja, como un jugador.
+  // Se aleja hasta que la mesa entera queda en la zona libre entre los paneles.
+  const w = window.innerWidth;
   const h = window.innerHeight;
-  const free = Math.max(0.4, (h - bottomBarHeight()) / h);
-  const tanV = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * free;
-  const freeAspect = camera.aspect / free;
-  const fitHeight = 1.5 / tanV; // medio largo visible con perspectiva
-  const fitWidth = 0.95 / (tanV * freeAspect); // medio ancho con raíles + margen
-  const dist = Math.max(fitHeight, fitWidth);
-  const elev = THREE.MathUtils.degToRad(62);
-  camera.position.set(-dist * Math.cos(elev), dist * Math.sin(elev), 0.001);
+  const mobile = w <= 600;
+  let maxX = 0.94;
+  let maxY = 0.94;
+  const minY = -1 + (2 * (bottomBarHeight() + 8)) / h;
+  const panel = document.querySelector<HTMLElement>('.player[data-player="0"]');
+  if (panel?.offsetParent) {
+    const r = panel.getBoundingClientRect();
+    if (mobile) maxY = 1 - (2 * (r.bottom + 8)) / h;
+    else maxX = 1 - (2 * (r.right + 16)) / w;
+  }
+  const elev = THREE.MathUtils.degToRad(mobile ? 52 : 40);
   controls.target.set(0, 0, 0);
+  const p = new THREE.Vector3();
+  for (let dist = 1.5; dist < 15; dist += 0.05) {
+    camera.position.set(-dist * Math.cos(elev), dist * Math.sin(elev), 0.001);
+    camera.lookAt(controls.target);
+    camera.updateMatrixWorld();
+    const fits = TABLE_CORNERS.every((c) => {
+      p.copy(c).project(camera);
+      return Math.abs(p.x) < maxX && p.y < maxY && p.y > minY;
+    });
+    if (fits) break;
+  }
 }
 
 function cameraBehindCue() {
@@ -504,8 +524,6 @@ function resize() {
   const h = window.innerHeight;
   renderer.setSize(w, h, false);
   camera.aspect = w / h;
-  // Centra la imagen en la zona que no tapa la barra inferior
-  camera.setViewOffset(w, h, 0, bottomBarHeight() / 2, w, h);
   camera.updateProjectionMatrix();
 }
 window.addEventListener('resize', resize);

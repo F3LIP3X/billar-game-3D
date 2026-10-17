@@ -38,34 +38,33 @@ html, body {
   left: 50%;
   bottom: max(16px, env(safe-area-inset-bottom));
   transform: translateX(-50%);
-  width: min(880px, calc(100% - 32px));
+  width: min(560px, calc(100% - 32px));
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 12px;
 }
 
-.scoreboard {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  width: 100%;
-  padding: 14px 20px;
+/* Paneles de jugador en los laterales */
+.player {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 200px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px 18px;
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 16px;
   backdrop-filter: blur(8px);
+  opacity: 0.55;
+  transition: opacity 0.3s, border-color 0.3s;
 }
-
-.player {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  opacity: 0.5;
-  transition: opacity 0.3s;
-}
-.player[data-player='1'] { align-items: flex-end; text-align: right; }
-.player.active { opacity: 1; }
+.player[data-player='0'] { left: 16px; }
+.player[data-player='1'] { right: 16px; }
+.player.active { opacity: 1; border-color: var(--brass); }
 .player.active .name::before {
   content: '';
   display: inline-block;
@@ -79,8 +78,7 @@ html, body {
 .name { font-weight: 600; font-size: 17px; }
 .group { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
 
-.tray { display: flex; gap: 6px; flex-wrap: wrap; min-height: 34px; }
-.player[data-player='1'] .tray { justify-content: flex-end; }
+.tray { display: grid; grid-template-columns: repeat(4, 34px); gap: 8px; }
 .chip {
   width: 34px;
   height: 34px;
@@ -98,7 +96,8 @@ html, body {
     radial-gradient(circle at center, #f6f1e4 0 36%, transparent 38%),
     linear-gradient(#f6f1e4 0 22%, var(--c) 22% 78%, #f6f1e4 78%);
 }
-.chip.potted { opacity: 0.18; box-shadow: none; }
+.chip { opacity: 0.22; transition: opacity 0.4s; }
+.chip.potted { opacity: 1; }
 
 #message {
   position: absolute;
@@ -176,11 +175,21 @@ html, body {
 .card button:hover { filter: brightness(1.1); }
 
 @media (max-width: 600px) {
-  .scoreboard { padding: 12px 14px; gap: 10px; }
+  /* En móvil los paneles van arriba, uno a cada lado */
+  .player {
+    top: 12px;
+    transform: none;
+    width: calc(50% - 20px);
+    padding: 10px 12px;
+    gap: 4px;
+  }
+  .player[data-player='0'] { left: 12px; }
+  .player[data-player='1'] { right: 12px; align-items: flex-end; text-align: right; }
   .name { font-size: 15px; }
-  .tray { gap: 4px; min-height: 26px; }
-  .chip { width: 26px; height: 26px; font-size: 11px; }
+  .tray { grid-template-columns: repeat(7, 1fr); gap: 3px; width: 100%; }
+  .chip { width: 100%; height: auto; aspect-ratio: 1; font-size: 9px; }
   .help { display: none; }
+  #message { top: auto; bottom: 110px; }
 }
 
 /* ---------- Pantalla de inicio ---------- */

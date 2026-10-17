@@ -1,19 +1,96 @@
 import * as THREE from 'three';
-import {
-  BALL_R,
-  CORNER_GAP,
-  CUSHION_W,
-  POCKETS,
-  RAIL_W,
-  SIDE_GAP,
-  TABLE_L,
-  TABLE_W,
-} from './constants';
+import { BALL_R, CUSHION_W, CUSHIONS, POCKETS, RAIL_W, TABLE_L, TABLE_W } from './constants';
 
 const HALF_L = TABLE_L / 2;
 const HALF_W = TABLE_W / 2;
 const CUSHION_H = BALL_R * 1.35;
 const RAIL_H = CUSHION_H + 0.006;
+const OUTER_L = HALF_L + CUSHION_W; // línea donde empieza la madera
+const OUTER_W = HALF_W + CUSHION_W;
+
+type Pocket = (typeof POCKETS)[number];
+const insidePocket = (x: number, z: number) => POCKETS.find((p) => Math.hypot(x - p.x, z - p.z) < p.r);
+
+/**
+ * Contorno del rectángulo del paño con las troneras: 'union' lo amplía con los agujeros
+ * (hueco de los raíles) y 'subtract' se los quita (borde del paño).
+ * Se recorre el perímetro y, al cruzar un agujero, se sustituye ese tramo por su arco.
+ */
+function pocketContour(mode: 'union' | 'subtract'): THREE.Vector2[] {
+  const corners: [number, number][] = [
+    [-OUTER_L, 0],
+    [-OUTER_L, -OUTER_W],
+    [OUTER_L, -OUTER_W],
+    [OUTER_L, OUTER_W],
+    [-OUTER_L, OUTER_W],
+    [-OUTER_L, 0],
+  ];
+  const perimeter: [number, number][] = [];
+  for (let i = 0; i < corners.length - 1; i++) {
+    const [x0, z0] = corners[i];
+    const [x1, z1] = corners[i + 1];
+    const n = Math.ceil(Math.hypot(x1 - x0, z1 - z0) / 0.002);
+    for (let k = 0; k < n; k++) perimeter.push([x0 + ((x1 - x0) * k) / n, z0 + ((z1 - z0) * k) / n]);
+  }
+
+  const out: THREE.Vector2[] = [];
+  let current: Pocket | undefined;
+  let entry: [number, number] = [0, 0];
+  for (const pt of perimeter) {
+    const pocket = insidePocket(pt[0], pt[1]);
+    if (!current && pocket) {
+      current = pocket;
+      entry = pt;
+    } else if (current && !pocket) {
+      const a0 = Math.atan2(entry[1] - current.z, entry[0] - current.x);
+      let a1 = Math.atan2(pt[1] - current.z, pt[0] - current.x);
+      if (mode === 'union') while (a1 <= a0) a1 += Math.PI * 2;
+      else while (a1 >= a0) a1 -= Math.PI * 2;
+      for (let k = 0; k <= 48; k++) {
+        const a = a0 + ((a1 - a0) * k) / 48;
+        out.push(new THREE.Vector2(current.x + Math.cos(a) * current.r, -(current.z + Math.sin(a) * current.r)));
+      }
+      current = undefined;
+    }
+    if (!current) out.push(new THREE.Vector2(pt[0], -pt[1]));
+  }
+  return out;
+}
+
+/** Puntos del borde de un agujero que quedan dentro de la madera (para el embellecedor). */
+function pocketRimArc(p: Pocket): THREE.Vector3[] {
+  const n = 96;
+  const inRail = (k: number) => {
+    const a = (k / n) * Math.PI * 2;
+    const x = p.x + Math.cos(a) * p.r;
+    const z = p.z + Math.sin(a) * p.r;
+    return Math.abs(x) > OUTER_L - 1e-6 || Math.abs(z) > OUTER_W - 1e-6;
+  };
+  let start = 0;
+  while (inRail(start)) start++;
+  const pts: THREE.Vector3[] = [];
+  for (let i = 1; i <= n; i++) {
+    const k = (start + i) % n;
+    if (!inRail(k)) continue;
+    const a = (k / n) * Math.PI * 2;
+    pts.push(new THREE.Vector3(p.x + Math.cos(a) * p.r, RAIL_H + 0.002, p.z + Math.sin(a) * p.r));
+  }
+  return pts;
+}
+
+function extrudeFlat(shape: THREE.Shape, depth: number, top: number, bevel = 0) {
+  const geo = new THREE.ExtrudeGeometry(shape, {
+    depth,
+    bevelEnabled: bevel > 0,
+    bevelThickness: bevel,
+    bevelSize: bevel,
+    bevelSegments: 3,
+    curveSegments: 48,
+  });
+  geo.rotateX(-Math.PI / 2); // la forma (x, -z) pasa al plano de la mesa
+  geo.translate(0, top - depth, 0);
+  return geo;
+}
 
 export function buildTable(): THREE.Group {
   const table = new THREE.Group();
@@ -27,97 +104,61 @@ export function buildTable(): THREE.Group {
     clearcoatRoughness: 0.18,
   });
   const brass = new THREE.MeshStandardMaterial({ color: 0xc9a25a, metalness: 1, roughness: 0.3 });
-  const pocketMat = new THREE.MeshStandardMaterial({ color: 0x050505, roughness: 1 });
+  const pocketMat = new THREE.MeshStandardMaterial({ color: 0x050505, roughness: 1, side: THREE.DoubleSide });
 
-  // Paño con agujeros para las troneras
-  const outer = HALF_L + CUSHION_W;
-  const outerW = HALF_W + CUSHION_W;
-  const shape = new THREE.Shape();
-  shape.moveTo(-outer, -outerW);
-  shape.lineTo(outer, -outerW);
-  shape.lineTo(outer, outerW);
-  shape.lineTo(-outer, outerW);
-  shape.closePath();
-  for (const p of POCKETS) {
-    const hole = new THREE.Path();
-    hole.absarc(p.x, -p.z, p.r, 0, Math.PI * 2, true);
-    shape.holes.push(hole);
-  }
-  const clothGeo = new THREE.ExtrudeGeometry(shape, { depth: 0.03, bevelEnabled: false, curveSegments: 32 });
-  clothGeo.rotateX(-Math.PI / 2);
-  clothGeo.translate(0, -0.03, 0);
-  const clothMesh = new THREE.Mesh(clothGeo, cloth);
+  // Paño: rectángulo hasta la madera con los agujeros recortados
+  const clothMesh = new THREE.Mesh(extrudeFlat(new THREE.Shape(pocketContour('subtract')), 0.03, 0), cloth);
   clothMesh.receiveShadow = true;
   table.add(clothMesh);
 
-  // Troneras: cilindros negros bajo los agujeros + aro de latón
+  // Troneras: pozo negro y embellecedor de latón siguiendo el corte de la madera
   for (const p of POCKETS) {
-    const cup = new THREE.Mesh(new THREE.CylinderGeometry(p.r, p.r * 0.85, 0.16, 32), pocketMat);
-    cup.position.set(p.x, -0.11, p.z);
+    const cup = new THREE.Mesh(new THREE.CylinderGeometry(p.r, p.r * 0.85, 0.18, 40, 1, true), pocketMat);
+    cup.position.set(p.x, -0.09, p.z);
     table.add(cup);
+    const bottom = new THREE.Mesh(new THREE.CircleGeometry(p.r * 0.85, 32), pocketMat);
+    bottom.rotation.x = -Math.PI / 2;
+    bottom.position.set(p.x, -0.17, p.z);
+    table.add(bottom);
 
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(p.r + 0.002, 0.004, 12, 40), brass);
-    ring.rotation.x = Math.PI / 2;
-    ring.position.set(p.x, 0.001, p.z);
-    table.add(ring);
+    const rim = new THREE.Mesh(
+      new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pocketRimArc(p)), 64, 0.006, 10, false),
+      brass,
+    );
+    rim.castShadow = true;
+    table.add(rim);
   }
 
-  // Bandas (cojines) con huecos en las troneras
-  const addCushion = (x0: number, x1: number, z0: number, z1: number) => {
-    const m = new THREE.Mesh(
-      new THREE.BoxGeometry(Math.abs(x1 - x0), CUSHION_H, Math.abs(z1 - z0)),
-      cushionCloth,
-    );
-    m.position.set((x0 + x1) / 2, CUSHION_H / 2, (z0 + z1) / 2);
+  // Bandas: prismas con las bocas en ángulo hacia las troneras
+  for (const quad of CUSHIONS) {
+    const shape = new THREE.Shape(quad.map(([x, z]) => new THREE.Vector2(x, -z)));
+    const m = new THREE.Mesh(extrudeFlat(shape, CUSHION_H, CUSHION_H), cushionCloth);
     m.castShadow = true;
     m.receiveShadow = true;
     table.add(m);
-  };
-  for (const s of [-1, 1]) {
-    // largas: dos tramos cada una
-    addCushion(-HALF_L + CORNER_GAP, -SIDE_GAP, s * HALF_W, s * (HALF_W + CUSHION_W));
-    addCushion(SIDE_GAP, HALF_L - CORNER_GAP, s * HALF_W, s * (HALF_W + CUSHION_W));
-    // cortas
-    addCushion(s * HALF_L, s * (HALF_L + CUSHION_W), -HALF_W + CORNER_GAP, HALF_W - CORNER_GAP);
   }
 
-  // Raíles de madera
-  const railOuterL = HALF_L + CUSHION_W + RAIL_W;
-  const railOuterW = HALF_W + CUSHION_W + RAIL_W;
-  const railShape = new THREE.Shape();
-  railShape.moveTo(-railOuterL, -railOuterW);
-  railShape.lineTo(railOuterL, -railOuterW);
-  railShape.lineTo(railOuterL, railOuterW);
-  railShape.lineTo(-railOuterL, railOuterW);
-  railShape.closePath();
-  const inner = new THREE.Path();
-  inner.moveTo(-outer, -outerW);
-  inner.lineTo(-outer, outerW);
-  inner.lineTo(outer, outerW);
-  inner.lineTo(outer, -outerW);
-  inner.closePath();
-  railShape.holes.push(inner);
-  const railDepth = RAIL_H + 0.22;
-  const railGeo = new THREE.ExtrudeGeometry(railShape, {
-    depth: railDepth,
-    bevelEnabled: true,
-    bevelThickness: 0.012,
-    bevelSize: 0.012,
-    bevelSegments: 4,
-  });
-  railGeo.rotateX(-Math.PI / 2);
-  railGeo.translate(0, RAIL_H - railDepth, 0);
-  const rails = new THREE.Mesh(railGeo, wood);
+  // Raíles de madera con el hueco de la mesa y las troneras cortadas
+  const railOuterL = OUTER_L + RAIL_W;
+  const railOuterW = OUTER_W + RAIL_W;
+  const railShape = new THREE.Shape([
+    new THREE.Vector2(-railOuterL, -railOuterW),
+    new THREE.Vector2(railOuterL, -railOuterW),
+    new THREE.Vector2(railOuterL, railOuterW),
+    new THREE.Vector2(-railOuterL, railOuterW),
+  ]);
+  railShape.holes.push(new THREE.Path(pocketContour('union')));
+  const rails = new THREE.Mesh(extrudeFlat(railShape, RAIL_H + 0.2, RAIL_H), wood);
   rails.castShadow = true;
   rails.receiveShadow = true;
   table.add(rails);
 
   // Superficie del raíl entre paño y madera (tapa el hueco bajo las troneras)
   const deck = new THREE.Mesh(
-    new THREE.BoxGeometry(2 * outer, 0.2, 2 * outerW),
+    new THREE.BoxGeometry(2 * OUTER_L, 0.2, 2 * OUTER_W),
     new THREE.MeshStandardMaterial({ color: 0x0b0b0b }),
   );
-  deck.position.y = -0.2;
+  deck.position.y = -0.21;
   table.add(deck);
 
   // Diamantes de nácar
