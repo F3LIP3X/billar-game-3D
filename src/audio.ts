@@ -1,9 +1,8 @@
 // Sonidos del juego. Los golpes son grabaciones reales (paquete "Pool And Billiards SFX"
-// de Suraj Kispotta, CC0) y el rumor de rodadura se sintetiza con ruido filtrado.
+// de Suraj Kispotta, CC0).
 
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
-let rolling: GainNode | null = null;
 let muted = (() => {
   try {
     return localStorage.getItem('billar-muted') === '1';
@@ -49,25 +48,6 @@ export function unlockAudio() {
     loadSamples(ctx).catch(() => {
       /* sin sonidos si fallan las descargas: el juego sigue */
     });
-
-    // Rumor de las bolas rodando sobre el paño: ruido grave filtrado que sigue a la velocidad
-    const noise = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
-    const data = noise.getChannelData(0);
-    let last = 0;
-    for (let i = 0; i < data.length; i++) {
-      last = last * 0.97 + (Math.random() * 2 - 1) * 0.03; // ruido "marrón": más grave y suave
-      data[i] = last * 6;
-    }
-    const src = ctx.createBufferSource();
-    src.buffer = noise;
-    src.loop = true;
-    const lowpass = ctx.createBiquadFilter();
-    lowpass.type = 'lowpass';
-    lowpass.frequency.value = 600;
-    rolling = ctx.createGain();
-    rolling.gain.value = 0;
-    src.connect(lowpass).connect(rolling).connect(master);
-    src.start();
   }
   if (ctx.state === 'suspended') void ctx.resume();
 }
@@ -137,8 +117,3 @@ export const sounds = {
   win: () => play('applause', 0.8, { pitch: 0 }),
 };
 
-/** Volumen del rumor de rodadura según la velocidad total de las bolas (m/s). */
-export function setRolling(totalSpeed: number) {
-  if (!ctx || !rolling) return;
-  rolling.gain.setTargetAtTime(Math.min(0.35, totalSpeed * 0.08), ctx.currentTime, 0.1);
-}

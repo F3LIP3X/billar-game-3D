@@ -7,7 +7,7 @@ import { castCueRay, isMoving, step, type Body } from './physics';
 import { buildRoom, buildTable } from './table';
 import { ballColor, createBallMesh, createCue } from './balls';
 import { evaluateShot, groupOf, type Player, type ShotRecord } from './rules';
-import { isMuted, setMuted, setRolling, sounds, unlockAudio } from './audio';
+import { isMuted, setMuted, sounds, unlockAudio } from './audio';
 
 // Línea de cabecera: en el saque (y tras blanca dentro en el saque) la blanca va detrás de ella
 const KITCHEN_X = HEAD_SPOT.x;
@@ -853,7 +853,6 @@ function frame() {
   }
 
   syncMeshes(dt);
-  setRolling(state === 'rolling' ? balls.reduce((sum, b) => sum + (b.body.active ? Math.hypot(b.body.vx, b.body.vz) : 0), 0) : 0);
 
   if (state === 'rolling' && !isMoving(balls.map((b) => b.body)) && balls.every((b) => !b.sinking)) {
     endShot();
