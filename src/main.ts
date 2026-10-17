@@ -559,25 +559,45 @@ function moveCamera(toPos: THREE.Vector3, toTarget: THREE.Vector3, toFov: number
 }
 
 const tweenSph = new THREE.Spherical();
+/** Bolas que el jugador actual puede tocar primero: las de su grupo, la 8 si lo ha terminado, o cualquiera menos la 8 con la mesa abierta. */
+function legalTargets() {
+  const group = players[current].group;
+  const table = onTable();
+  if (!group) return table.filter((n) => n !== 8);
+  const own = table.filter((n) => groupOf(n) === group);
+  return own.length ? own : [8];
+}
+
 /**
- * Coloca la cámara junto a la blanca mirando hacia el centro de la mesa, a la altura de un
- * jugador: la blanca queda en primer plano y la mesa por delante.
+ * Coloca la cámara junto a la blanca mirando hacia la bola a la que puede tirar el jugador
+ * que tenga más cerca, a la altura de un jugador: la blanca en primer plano y esa bola delante.
  */
 function focusCueBall() {
   const c = cueBall().body;
-  // Dirección horizontal de la blanca hacia el centro (si está casi en el centro, la de la cámara)
-  const toCenter = new THREE.Vector3(-c.x, 0, -c.z);
-  if (toCenter.length() < 0.15) toCenter.set(controls.target.x - camera.position.x, 0, controls.target.z - camera.position.z);
-  toCenter.normalize();
-  // El punto al que se mira está entre la blanca y el centro de la mesa
-  const lookDist = Math.min(0.5, Math.hypot(c.x, c.z));
-  const target = new THREE.Vector3(c.x + toCenter.x * lookDist, 0, c.z + toCenter.z * lookDist);
+  let nearest: Body | null = null;
+  let best = Infinity;
+  for (const n of legalTargets()) {
+    const b = balls[n].body;
+    const d = Math.hypot(b.x - c.x, b.z - c.z);
+    if (b.active && d < best) {
+      best = d;
+      nearest = b;
+    }
+  }
+  // Dirección horizontal hacia esa bola (sin bolas válidas, hacia el centro de la mesa)
+  const toBall = nearest ? new THREE.Vector3(nearest.x - c.x, 0, nearest.z - c.z) : new THREE.Vector3(-c.x, 0, -c.z);
+  if (toBall.length() < 0.01) toBall.set(controls.target.x - camera.position.x, 0, controls.target.z - camera.position.z);
+  const dist = toBall.length();
+  toBall.normalize();
+  // Se mira a un punto entre la blanca y la bola para que se vean las dos
+  const lookDist = Math.min(0.5, dist / 2);
+  const target = new THREE.Vector3(c.x + toBall.x * lookDist, 0, c.z + toBall.z * lookDist);
   const radius = window.innerWidth <= 600 ? 2.4 : 1.9;
   const elev = THREE.MathUtils.degToRad(35);
   const pos = new THREE.Vector3(
-    target.x - toCenter.x * radius * Math.cos(elev),
+    target.x - toBall.x * radius * Math.cos(elev),
     radius * Math.sin(elev),
-    target.z - toCenter.z * radius * Math.cos(elev),
+    target.z - toBall.z * radius * Math.cos(elev),
   );
   moveCamera(pos, target, BASE_FOV, true);
 }
