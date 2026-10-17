@@ -344,11 +344,13 @@ function renderHud() {
     const p = players[i];
     el.classList.toggle('active', i === current);
     const left = p.group ? tableBalls.filter((n) => groupOf(n) === p.group).length : 0;
-    el.querySelector('.group')!.textContent = !p.group
+    const groupEl = el.querySelector<HTMLElement>('.group')!;
+    groupEl.textContent = !p.group
       ? 'mesa abierta'
       : left > 0
         ? `${p.group} · quedan ${left}`
         : `${p.group} · ¡a por la 8!`;
+    groupEl.dataset.short = !p.group ? '' : left > 0 ? `${p.group} ${left}` : '¡la 8!';
     const tray = el.querySelector('.tray')!;
     tray.innerHTML = '';
     if (!p.group) return;
@@ -488,9 +490,13 @@ function setSpin(value: number) {
   spinLabel.textContent = spin > 0 ? 'Seguir' : spin < 0 ? 'Retroceso' : 'Centro';
 }
 document.querySelector('#spin')!.addEventListener('click', (e) => {
-  const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-  const up = (e as MouseEvent).clientY < r.top + r.height / 2;
-  setSpin(spin + (up ? 0.25 : -0.25));
+  if (touch) {
+    setSpin(spin >= 0.5 ? -0.5 : spin + 0.25); // un toque pasa al siguiente valor y da la vuelta
+  } else {
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const up = (e as MouseEvent).clientY < r.top + r.height / 2;
+    setSpin(spin + (up ? 0.25 : -0.25));
+  }
   sounds.ui();
 });
 
@@ -525,17 +531,27 @@ const BASE_FOV = 42;
 const TOP_FOV = 24; // en la vista 2D, poco ángulo para que apenas haya perspectiva
 
 /** Distancia mínima en la dirección `dir` (desde el centro) para que la mesa entera quepa en la zona libre. */
+/** Hueco vertical libre en pantalla (en px) entre los paneles de jugador de arriba y los controles de abajo. */
+function freeRect() {
+  const h = window.innerHeight;
+  const panel = document.querySelector<HTMLElement>('.player[data-player="0"]');
+  const top = panel?.offsetParent ? panel.getBoundingClientRect().bottom + 8 : 0;
+  return { top, bottom: h - (bottomBarHeight() + 8) };
+}
+
 function fitPosition(dir: THREE.Vector3, fov: number) {
   const w = window.innerWidth;
   const h = window.innerHeight;
-  let maxX = 0.94;
+  let maxX = 0.96;
   let maxY = 0.94;
-  const minY = -1 + (2 * (bottomBarHeight() + 8)) / h;
+  let minY = -1 + (2 * (bottomBarHeight() + 8)) / h;
   const panel = document.querySelector<HTMLElement>('.player[data-player="0"]');
   if (panel?.offsetParent) {
-    const r = panel.getBoundingClientRect();
-    if (w <= 600) maxY = 1 - (2 * (r.bottom + 8)) / h;
-    else maxX = 1 - (2 * (r.right + 16)) / w;
+    if (w <= 600) {
+      const f = freeRect();
+      maxY = 1 - (2 * f.top) / h;
+      minY = -1 + (2 * (h - f.bottom)) / h;
+    } else maxX = 1 - (2 * (panel.getBoundingClientRect().right + 16)) / w;
   }
   const cam = camera.clone();
   cam.fov = fov;
@@ -900,7 +916,7 @@ function updateAimVisuals() {
   powerEl.classList.toggle('visible', state === 'charging');
   shootBtn.disabled = !aiming;
   kitchen.visible = state === 'placing' && kitchenOnly;
-  shootBtn.textContent = state === 'placing' ? 'Toca la mesa para colocar' : 'Mantén para tirar';
+  shootBtn.textContent = state === 'placing' ? 'Arrastra la blanca' : state === 'charging' ? 'Suelta para tirar' : 'Mantén para tirar';
 
   if (state === 'placing') {
     ghost.position.set(c.x, BALL_R, c.z);
@@ -1246,8 +1262,13 @@ function prewarmPip() {
 function applyMenuOffset() {
   const w = window.innerWidth;
   const h = window.innerHeight;
-  if (state !== 'menu') camera.clearViewOffset();
-  else if (w > 600) camera.setViewOffset(w, h, -w * 0.18, 0, w, h);
+  if (state !== 'menu') {
+    if (w <= 600) {
+      // Pantalla estrecha: la mesa se centra en el hueco libre, no en el centro de la pantalla
+      const f = freeRect();
+      camera.setViewOffset(w, h, 0, h / 2 - (f.top + f.bottom) / 2, w, h);
+    } else camera.clearViewOffset();
+  } else if (w > 600) camera.setViewOffset(w, h, -w * 0.18, 0, w, h);
   else camera.setViewOffset(w, h, 0, h * 0.22, w, h);
   camera.updateProjectionMatrix();
 }
@@ -1308,6 +1329,14 @@ document.querySelector('#play')!.addEventListener('click', () => {
   cameraForPlacing();
   if (touch) showMessage('Toca la mesa para colocar la blanca · pellizca para acercar');
 });
+
+if (touch) {
+  // En móvil: el efecto va junto a los botones de tiro y el sonido arriba a la derecha
+  const spinBtn = document.querySelector<HTMLElement>('#spin')!;
+  spinBtn.classList.add('glass');
+  document.querySelector('#touch-controls')!.prepend(spinBtn);
+  document.querySelector('#hud')!.append(document.querySelector('#mute')!);
+}
 
 resize();
 if (!low) prewarmPip();

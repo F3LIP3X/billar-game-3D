@@ -131,14 +131,14 @@ export function buildTable(): THREE.Group {
           sheenRoughness: 0.75,
           sheenColor: new THREE.Color(0x5a7fc4),
         });
-  const cloth = feltMaterial(0x1d3f78);
-  const cushionCloth = feltMaterial(0x183668);
+  const cloth = feltMaterial(low ? 0x142b55 : 0x1d3f78);
+  const cushionCloth = feltMaterial(low ? 0x10244a : 0x183668);
 
   // Cerezo barnizado: veta de la textura + capa de barniz (clearcoat)
   const cherry = cherryTexture();
   cherry.repeat.set(1 / 1.2, 1 / 0.35); // 1,2 m de veta a lo largo, 35 cm de ancho
   const wood: THREE.MeshStandardMaterial | THREE.MeshLambertMaterial = low
-    ? new THREE.MeshLambertMaterial({ map: cherry })
+    ? new THREE.MeshLambertMaterial({ map: cherry, color: 0xb59a8c }) // oscurece la veta, como el barniz
     : new THREE.MeshPhysicalMaterial({ map: cherry, roughness: 0.55, clearcoat: 1, clearcoatRoughness: 0.06 });
   // Cuerpo y patas tienen UV de 0 a 1: otra repetición de la misma veta
   const bodyCherry = cherry.clone();

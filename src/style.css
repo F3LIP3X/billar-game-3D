@@ -654,13 +654,46 @@ body.free-cam #scene:active { cursor: grabbing; }
   font-variant-numeric: tabular-nums;
 }
 
+/* En móvil el botón de sonido se mueve a la esquina superior derecha */
+#hud > #mute {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 40px;
+  height: 40px;
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  pointer-events: auto;
+}
+
 /* ---------- Táctil y pantallas estrechas ---------- */
 @media (pointer: coarse) {
-  #touch-controls { display: flex; }
   #help-btn { display: none; }
-  /* En móvil solo hay vista 2D: no hace falta el selector de vistas */
-  .views, .toolbar .sep { display: none; }
+  /* En móvil solo hay vista 2D: no hace falta el selector de vistas ni la barra de herramientas */
+  .toolbar, .views { display: none; }
   .mouse-only { display: none; }
+
+  /* Una sola fila de controles: efecto · girar fino · tirar (deja sitio al contador de FPS) */
+  .bottom {
+    width: calc(100% - 24px);
+    max-width: none;
+    bottom: calc(max(12px, env(safe-area-inset-bottom)) + 14px);
+  }
+  #touch-controls { display: flex; width: 100%; gap: 8px; }
+  #touch-controls #spin {
+    width: 56px;
+    height: 56px;
+    padding: 0;
+    justify-content: center;
+    border-radius: 50%;
+  }
+  #touch-controls .spin-ball { width: 44px; height: 44px; }
+  #touch-controls #spin-label { display: none; }
+  #touch-controls .fine { gap: 8px; }
+  #touch-controls .fine button { width: 48px; height: 48px; }
+  #shoot-btn { flex: 1; min-height: 56px; padding: 0 16px; font-size: 16px; }
+  /* La barra de potencia flota sobre la fila, así no ocupa sitio en el encuadre de la mesa */
+  #power { position: absolute; bottom: calc(100% + 10px); left: 24px; right: 24px; width: auto; }
 }
 @media (pointer: fine) {
   .touch-only { display: none; }
@@ -676,33 +709,39 @@ body.free-cam #scene:active { cursor: grabbing; }
   .start-panel .emblem { display: none; }
   .lede { font-size: 16px; margin: 10px 0 20px; }
   .credits { left: 16px; justify-content: center; }
+  /* Paneles de jugador: dos píldoras de una línea arriba, con el botón de sonido a la derecha */
   .player {
     top: 12px;
     transform: none;
-    width: calc(50% - 18px);
-    padding: 10px 12px 12px;
-    border-radius: 16px;
+    width: calc(50% - 38px);
+    height: 40px;
+    padding: 0 14px;
+    border-radius: 999px;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
   }
   .player[data-player='0'] { left: 12px; }
-  .player[data-player='1'] { right: 12px; }
-  /* En móvil la barra de turno va abajo de la tarjeta */
+  .player[data-player='1'] { left: calc(50% - 18px); right: auto; }
+  .player.active { background: color-mix(in srgb, var(--pc) 16%, var(--surface-solid)); }
+  .player-head { flex: 1; min-width: 0; gap: 6px; }
+  .player .name { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .turn-tag, .tray { display: none; }
+  .group { font-size: 0; flex: none; }
+  .group::after { content: attr(data-short); font-size: 12px; white-space: nowrap; }
+  /* Barra de turno: un trazo fino bajo la píldora */
   .player::before {
     top: auto;
     bottom: 0;
-    left: 12px !important;
-    right: 12px !important;
+    left: 18px !important;
+    right: 18px !important;
     width: auto;
     height: 3px;
-    border-radius: 2px 2px 0 0 !important;
+    border-radius: 3px 3px 0 0 !important;
   }
-  .player .name { font-size: 15px; }
-  .turn-tag { font-size: 12px; }
-  .tray { grid-template-columns: repeat(7, 1fr); gap: 3px; }
-  .chip { width: 100%; height: auto; aspect-ratio: 1; font-size: 9px; }
-  #message { top: 150px; font-size: 14px; }
+  #message { top: 64px; font-size: 14px; }
   #pip { top: 150px; right: 12px; width: 46vw; }
   #spin-label { display: none; }
-  #spin { padding: 0 4px; }
   .views button { padding: 0 12px; }
 }
 
