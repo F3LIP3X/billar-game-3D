@@ -12,7 +12,7 @@ import { buildRoom, buildTable } from './table';
 import { ballColor, createBallMesh, createBlobShadow, createCue } from './balls';
 import { evaluateShot, groupOf, type Player, type ShotRecord } from './rules';
 import { isMuted, setMuted, sounds, unlockAudio } from './audio';
-import { low, quality, rememberLowQuality } from './quality';
+import { low, quality, rememberLowQuality, touch } from './quality';
 
 // Línea de cabecera: en el saque (y tras blanca dentro en el saque) la blanca va detrás de ella
 const KITCHEN_X = HEAD_SPOT.x;
@@ -90,8 +90,10 @@ const FREE_BUTTONS = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.PAN, RIGHT:
 controls.mouseButtons = { ...PLAY_BUTTONS };
 controls.touches = {
   ONE: null as unknown as THREE.TOUCH,
-  TWO: THREE.TOUCH.DOLLY_ROTATE,
+  // En móvil se juega siempre desde arriba: dos dedos solo acercan y desplazan, no giran
+  TWO: touch ? THREE.TOUCH.DOLLY_PAN : THREE.TOUCH.DOLLY_ROTATE,
 };
+if (touch) controls.enableRotate = false;
 // En el menú la cámara gira despacio alrededor de la mesa
 controls.autoRotate = true;
 controls.autoRotateSpeed = 0.6;
@@ -225,7 +227,7 @@ const powerEl = document.querySelector<HTMLDivElement>('#power')!;
 const powerFill = document.querySelector<HTMLDivElement>('#power-fill')!;
 document.querySelector('#restart')!.addEventListener('click', () => {
   newGame();
-  setView('3d', false);
+  setView(startView, false);
   cameraForPlacing();
 });
 document.querySelector('#to-menu')!.addEventListener('click', () => {
@@ -375,7 +377,7 @@ function pointerOnTable(e: PointerEvent) {
 
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
-// En táctil: un dedo apunta / mueve la blanca, dos dedos mueven la cámara y se tira con el botón.
+// En táctil: un dedo apunta / mueve la blanca, dos dedos acercan y desplazan, y se tira con el botón.
 const touches = new Set<number>();
 
 // El taco apunta siempre al cursor. Con Shift pasa a modo de precisión: el giro es relativo
@@ -687,7 +689,9 @@ function updateZoom(dt: number) {
 }
 
 type View = '3d' | '2d' | 'cue';
-let view: View = '3d';
+/** Vista con la que empieza la partida: en móvil, siempre la cenital. */
+const startView: View = touch ? '2d' : '3d';
+let view: View = startView;
 /** Desde arriba; la mesa a lo largo de la pantalla según la orientación. */
 function topCamera(animate: boolean) {
   const dir = camera.aspect >= 1 ? new THREE.Vector3(0, 1, 0.0001) : new THREE.Vector3(-0.0001, 1, 0);
@@ -851,6 +855,7 @@ function endShot() {
   if (state === 'placing') cameraForPlacing();
   else if (view === 'cue') setView('cue');
   else if (view === '3d') focusCueBall();
+  else if (touch) setView('2d'); // recentra y deshace el zoom del turno anterior
 }
 
 // ---------- Bucle ----------
@@ -1299,9 +1304,9 @@ document.querySelector('#play')!.addEventListener('click', () => {
   controls.autoRotate = false;
   newGame();
   resize();
-  setView('3d', false);
+  setView(startView, false);
   cameraForPlacing();
-  if (matchMedia('(pointer: coarse)').matches) showMessage('Toca la mesa para colocar la blanca · dos dedos mueven la cámara');
+  if (touch) showMessage('Toca la mesa para colocar la blanca · pellizca para acercar');
 });
 
 resize();

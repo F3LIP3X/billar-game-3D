@@ -658,6 +658,12 @@ body.free-cam #scene:active { cursor: grabbing; }
 @media (pointer: coarse) {
   #touch-controls { display: flex; }
   #help-btn { display: none; }
+  /* En móvil solo hay vista 2D: no hace falta el selector de vistas */
+  .views, .toolbar .sep { display: none; }
+  .mouse-only { display: none; }
+}
+@media (pointer: fine) {
+  .touch-only { display: none; }
 }
 
 @media (max-width: 600px) {

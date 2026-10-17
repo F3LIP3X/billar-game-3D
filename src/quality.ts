@@ -31,3 +31,6 @@ export function rememberLowQuality() {
     /* sin almacenamiento: solo vale para esta carga */
   }
 }
+
+/** Pantalla táctil como puntero principal (móvil o tableta): se juega solo en vista 2D. */
+export const touch = matchMedia('(pointer: coarse)').matches;
