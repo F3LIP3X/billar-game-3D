@@ -2,7 +2,7 @@
 
 Juego de billar (bola 8) en el navegador. Vite + TypeScript + Three.js, con física propia.
 
-**Jugar online:** https://billar-3d-f3lip3x.web.app
+**Jugar online:** https://billar3d.web.app
 
 ## Arrancar
 
@@ -51,7 +51,7 @@ npm run dev
 
 ## Publicar
 
-El juego está en Firebase Hosting (proyecto `billar-3d-f3lip3x`). Para publicar una versión nueva:
+El juego está en Firebase Hosting (proyecto `billar-3d-f3lip3x`, sitio `billar3d`; la dirección antigua redirige a la nueva). Para publicar una versión nueva:
 
 ```bash
 npm run deploy

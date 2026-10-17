@@ -1,5 +1,13 @@
 {
   "projects": {
     "default": "billar-3d-f3lip3x"
+  },
+  "targets": {
+    "billar-3d-f3lip3x": {
+      "hosting": {
+        "juego": ["billar3d"],
+        "antigua": ["billar-3d-f3lip3x"]
+      }
+    }
   }
 }
