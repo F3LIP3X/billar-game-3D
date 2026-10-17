@@ -7,7 +7,7 @@ import { castCueRay, isMoving, step, type Body } from './physics';
 import { buildRoom, buildTable } from './table';
 import { ballColor, createBallMesh, createCue } from './balls';
 import { evaluateShot, groupOf, type Player, type ShotRecord } from './rules';
-import { sounds, unlockAudio } from './audio';
+import { isMuted, setMuted, setRolling, sounds, unlockAudio } from './audio';
 
 // Línea de cabecera: en el saque (y tras blanca dentro en el saque) la blanca va detrás de ella
 const KITCHEN_X = HEAD_SPOT.x;
@@ -126,6 +126,9 @@ let isBreak = true;
 let shotIsBreak = false;
 let kitchenOnly = true;
 
+// Color de cada jugador: panel, aviso de turno y guía de tiro
+const PLAYER_COLORS = ['#e2b65e', '#6aa6ff'];
+
 // Estadísticas de la partida para la pantalla de victoria
 let stats = [0, 1].map(() => ({ shots: 0, potted: 0, fouls: 0 }));
 let gameStart = 0;
@@ -167,7 +170,8 @@ function newGame() {
   overlay.hidden = true;
   syncMeshes(0);
   renderHud();
-  showMessage('Saque de Jugador 1: coloca la blanca detrás de la línea');
+  showMessage('Coloca la blanca detrás de la línea');
+  announceTurn('Saque de Jugador 1');
 }
 
 // ---------- HUD ----------
@@ -273,13 +277,30 @@ function showMessage(text: string) {
   messageTimer = window.setTimeout(() => messageEl.classList.remove('visible'), 2800);
 }
 
+const turnBanner = document.querySelector<HTMLDivElement>('#turn-banner')!;
+let bannerTimer = 0;
+/** Aviso grande en el centro con el jugador que tira ahora. */
+function announceTurn(text: string) {
+  turnBanner.textContent = text;
+  turnBanner.style.setProperty('--pc', PLAYER_COLORS[current]);
+  turnBanner.classList.add('show');
+  clearTimeout(bannerTimer);
+  bannerTimer = window.setTimeout(() => turnBanner.classList.remove('show'), 1600);
+  (guide.material as THREE.LineDashedMaterial).color.set(PLAYER_COLORS[current]);
+}
+
 function renderHud() {
   const tableBalls = onTable();
   document.querySelectorAll<HTMLDivElement>('.player').forEach((el) => {
     const i = Number(el.dataset.player);
     const p = players[i];
     el.classList.toggle('active', i === current);
-    el.querySelector('.group')!.textContent = p.group ? p.group : 'mesa abierta';
+    const left = p.group ? tableBalls.filter((n) => groupOf(n) === p.group).length : 0;
+    el.querySelector('.group')!.textContent = !p.group
+      ? 'mesa abierta'
+      : left > 0
+        ? `${p.group} · quedan ${left}`
+        : `${p.group} · ¡a por la 8!`;
     const tray = el.querySelector('.tray')!;
     tray.innerHTML = '';
     if (!p.group) return;
@@ -422,6 +443,7 @@ document.querySelector('#spin')!.addEventListener('click', (e) => {
   const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
   const up = (e as MouseEvent).clientY < r.top + r.height / 2;
   setSpin(spin + (up ? 0.25 : -0.25));
+  sounds.ui();
 });
 
 window.addEventListener('keydown', (e) => {
@@ -609,8 +631,29 @@ function chaseCamera() {
 
 
 document.querySelectorAll<HTMLButtonElement>('[data-view]').forEach((b) =>
-  b.addEventListener('click', () => setView(b.dataset.view as View)),
+  b.addEventListener('click', () => {
+    sounds.ui();
+    setView(b.dataset.view as View);
+  }),
 );
+
+const muteBtn = document.querySelector<HTMLButtonElement>('#mute')!;
+function renderMute() {
+  muteBtn.classList.toggle('off', isMuted());
+  muteBtn.setAttribute('aria-label', isMuted() ? 'Activar sonido' : 'Silenciar');
+  muteBtn.title = isMuted() ? 'Activar sonido (M)' : 'Silenciar (M)';
+}
+function toggleMute() {
+  unlockAudio();
+  setMuted(!isMuted());
+  renderMute();
+  sounds.ui();
+}
+muteBtn.addEventListener('click', toggleMute);
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'm' || e.key === 'M') toggleMute();
+});
+renderMute();
 
 function placementValid() {
   const c = cueBall().body;
@@ -652,7 +695,10 @@ function endShot() {
     return;
   }
 
-  if (!result.keepTurn) current = 1 - current;
+  const turnChanged = !result.keepTurn;
+  if (turnChanged) current = 1 - current;
+  if (result.foul) sounds.foul();
+  else if (turnChanged) sounds.turn();
 
   if (result.foul) {
     if (!cb.body.active) {
@@ -671,6 +717,7 @@ function endShot() {
   }
   showMessage(result.message);
   renderHud();
+  if (turnChanged) announceTurn(`Turno de ${players[current].name}`);
   // La vista tras la bola se recoloca detrás de la blanca para el siguiente tiro
   if (view === 'cue') setView('cue');
 }
@@ -788,8 +835,9 @@ function frame() {
 
   if (state === 'rolling') {
     const ev = step(balls.map((b) => b.body), dt);
+    // En el saque hay muchos choques a la vez: solo suenan los más fuertes
+    [...ev.ballHits].sort((a, b) => b.speed - a.speed).slice(0, 5).forEach((h) => sounds.ball(h.speed));
     for (const hit of ev.ballHits) {
-      sounds.ball(hit.speed);
       if (shot.firstHit === null && (hit.a.id === 0 || hit.b.id === 0)) {
         shot.firstHit = hit.a.id === 0 ? hit.b.id : hit.a.id;
       }
@@ -805,6 +853,7 @@ function frame() {
   }
 
   syncMeshes(dt);
+  setRolling(state === 'rolling' ? balls.reduce((sum, b) => sum + (b.body.active ? Math.hypot(b.body.vx, b.body.vz) : 0), 0) : 0);
 
   if (state === 'rolling' && !isMoving(balls.map((b) => b.body)) && balls.every((b) => !b.sinking)) {
     endShot();

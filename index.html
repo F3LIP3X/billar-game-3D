@@ -25,14 +25,17 @@
 
     <div id="hud" hidden>
       <div id="message"></div>
+      <div id="turn-banner" aria-live="polite"></div>
       <div id="free-cam-badge">Cámara libre · arrastra para girar, clic derecho para desplazar · suelta Ctrl para jugar</div>
 
       <aside class="player" data-player="0">
+        <span class="turn-tag">Turno</span>
         <span class="name">Jugador 1</span>
         <span class="group"></span>
         <div class="tray"></div>
       </aside>
       <aside class="player" data-player="1">
+        <span class="turn-tag">Turno</span>
         <span class="name">Jugador 2</span>
         <span class="group"></span>
         <div class="tray"></div>
@@ -46,6 +49,10 @@
             <span id="spin-label">Centro</span>
           </button>
           <div id="power"><div id="power-fill"></div></div>
+          <button id="mute" aria-label="Silenciar">
+            <svg class="on-icon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor"/><path d="M16 8.5a4.5 4.5 0 0 1 0 7M18.5 6a8 8 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            <svg class="off-icon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor"/><path d="M16.5 9.5l5 5M21.5 9.5l-5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </button>
           <div class="views" role="group" aria-label="Cámara">
             <button data-view="3d" class="on">3D</button>
             <button data-view="2d">2D</button>
@@ -64,7 +71,7 @@
 
         <p class="help">
           Mueve el ratón para apuntar · Mantén clic para cargar, suelta para tirar · Shift + ratón o ← →: ajuste fino · ↑ ↓ efecto ·
-          Clic derecho: girar · Botón central: desplazar · Rueda: zoom · Ctrl: cámara libre · 1 / 2 / V: vistas 3D, 2D y tras la bola
+          Clic derecho: girar · Botón central: desplazar · Rueda: zoom · Ctrl: cámara libre · M: sonido · 1 / 2 / V: vistas 3D, 2D y tras la bola
         </p>
       </div>
 

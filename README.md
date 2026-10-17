@@ -40,5 +40,5 @@ npm run dev
 - `src/rules.ts` — reglas simplificadas de bola 8 (grupos, faltas, bola en mano)
 - `src/table.ts` — mesa, sala e iluminación
 - `src/balls.ts` — bolas (texturas generadas en canvas) y taco
-- `src/audio.ts` — sonidos sintetizados con WebAudio
+- `src/audio.ts` — sonidos sintetizados con WebAudio (choques, bandas, troneras, rodadura, turnos); M para silenciar
 - `src/main.ts` — escena, entrada y bucle de juego
