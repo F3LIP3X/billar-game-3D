@@ -142,37 +142,107 @@ html, body {
   color: var(--muted);
 }
 
+/* ---------- Pantalla de victoria ---------- */
 #overlay {
   position: absolute;
   inset: 0;
   display: grid;
   place-items: center;
-  background: rgba(0, 0, 0, 0.55);
+  padding: 16px;
+  background: radial-gradient(ellipse at center, rgba(10, 14, 28, 0.55), rgba(5, 5, 8, 0.88) 75%);
+  backdrop-filter: blur(3px);
   pointer-events: auto;
+  animation: fade-in 0.6s ease both;
 }
 #overlay[hidden] { display: none; }
-.card {
-  padding: 32px 40px;
-  border-radius: 18px;
-  background: var(--panel);
-  border: 1px solid var(--line);
+#confetti { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2; }
+
+.victory {
+  position: relative;
+  width: min(440px, 100%);
+  padding: 64px 36px 32px;
+  border-radius: 24px;
   text-align: center;
+  background:
+    linear-gradient(180deg, rgba(201, 162, 90, 0.12), transparent 40%),
+    rgba(16, 13, 11, 0.92);
+  border: 1px solid rgba(201, 162, 90, 0.55);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  animation: card-in 0.7s cubic-bezier(0.2, 0.9, 0.3, 1.2) 0.15s both;
 }
-.card h2 {
-  margin: 0 0 20px;
+
+.emblem {
+  position: absolute;
+  top: -48px;
+  left: 50%;
+  width: 96px;
+  height: 96px;
+  margin-left: -48px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: radial-gradient(circle at 32% 28%, #5a5a5a, #111 45%, #000 80%);
+  box-shadow: 0 0 0 4px rgba(201, 162, 90, 0.9), 0 0 40px rgba(201, 162, 90, 0.45), 0 12px 24px rgba(0, 0, 0, 0.6);
+  animation: emblem-in 0.8s cubic-bezier(0.2, 0.9, 0.3, 1.4) 0.35s both;
+}
+.emblem span {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #f6f1e4;
+  color: #111;
+  font: 700 26px Inter, system-ui, sans-serif;
+}
+
+.victory .eyebrow { margin: 0 0 6px; color: var(--brass); }
+#winner-name {
+  margin: 0;
   font-family: Fraunces, Georgia, serif;
-  font-size: 26px;
+  font-size: clamp(30px, 8vw, 44px);
+  line-height: 1.05;
+  white-space: nowrap;
+  color: var(--ink);
 }
-.card button {
+#win-reason { margin: 10px 0 24px; color: var(--muted); font-size: 15px; }
+
+.stats {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.stats th, .stats td { padding: 9px 8px; border-bottom: 1px solid rgba(201, 162, 90, 0.15); }
+.stats thead th { white-space: nowrap; font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.stats tbody th { text-align: left; font-weight: 400; color: var(--muted); }
+.stats td { text-align: center; font-weight: 600; }
+.stats .winner { color: var(--brass); }
+.stats tbody tr:last-child th, .stats tbody tr:last-child td { border-bottom: none; }
+
+.duration { margin: 16px 0 24px; font-size: 13px; color: var(--muted); }
+.duration span { color: var(--ink); font-variant-numeric: tabular-nums; }
+
+.actions { display: flex; gap: 10px; justify-content: center; }
+.actions button {
   font: 600 15px Inter, system-ui, sans-serif;
-  padding: 10px 22px;
+  padding: 12px 26px;
   border-radius: 999px;
-  border: none;
-  background: var(--brass);
-  color: #1b1209;
   cursor: pointer;
+  transition: transform 0.15s, filter 0.15s;
 }
-.card button:hover { filter: brightness(1.1); }
+.actions button:active { transform: translateY(1px); }
+.actions .primary { border: none; background: var(--brass); color: #1b1209; box-shadow: 0 8px 24px rgba(201, 162, 90, 0.3); }
+.actions .primary:hover { filter: brightness(1.1); }
+.actions .ghost { background: none; color: var(--ink); border: 1px solid var(--line); }
+.actions .ghost:hover { border-color: var(--brass); }
+
+@keyframes fade-in { from { opacity: 0; } }
+@keyframes card-in { from { opacity: 0; transform: translateY(24px) scale(0.94); } }
+@keyframes emblem-in { from { opacity: 0; transform: scale(0.3) rotate(-120deg); } }
+@media (prefers-reduced-motion: reduce) {
+  #overlay, .victory, .emblem { animation: none; }
+}
 
 @media (max-width: 600px) {
   /* En móvil los paneles van arriba, uno a cada lado */

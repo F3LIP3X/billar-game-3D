@@ -79,18 +79,34 @@ function pocketRimArc(p: Pocket): THREE.Vector3[] {
   return pts;
 }
 
+/** Extruye una forma de planta hacia arriba hasta `top`. Con `bevel` los cantos salen redondeados. */
 function extrudeFlat(shape: THREE.Shape, depth: number, top: number, bevel = 0) {
   const geo = new THREE.ExtrudeGeometry(shape, {
     depth,
     bevelEnabled: bevel > 0,
     bevelThickness: bevel,
     bevelSize: bevel,
-    bevelSegments: 3,
+    bevelSegments: 6,
     curveSegments: 48,
   });
   geo.rotateX(-Math.PI / 2); // la forma (x, -z) pasa al plano de la mesa
-  geo.translate(0, top - depth, 0);
+  geo.translate(0, top - depth - bevel, 0); // el biselado sobresale por arriba: se compensa
   return geo;
+}
+
+/** Rectángulo de esquinas redondeadas centrado en el origen. */
+function roundedRect(halfL: number, halfW: number, r: number) {
+  const s = new THREE.Shape();
+  s.moveTo(-halfL + r, -halfW);
+  s.lineTo(halfL - r, -halfW);
+  s.absarc(halfL - r, -halfW + r, r, -Math.PI / 2, 0, false);
+  s.lineTo(halfL, halfW - r);
+  s.absarc(halfL - r, halfW - r, r, 0, Math.PI / 2, false);
+  s.lineTo(-halfL + r, halfW);
+  s.absarc(-halfL + r, halfW - r, r, Math.PI / 2, Math.PI, false);
+  s.lineTo(-halfL, -halfW + r);
+  s.absarc(-halfL + r, -halfW + r, r, Math.PI, Math.PI * 1.5, false);
+  return s;
 }
 
 export function buildTable(): THREE.Group {
@@ -158,7 +174,7 @@ export function buildTable(): THREE.Group {
   // Bandas: prismas con las bocas en ángulo hacia las troneras
   for (const quad of CUSHIONS) {
     const shape = new THREE.Shape(quad.map(([x, z]) => new THREE.Vector2(x, -z)));
-    const m = new THREE.Mesh(extrudeFlat(shape, CUSHION_H, CUSHION_H), cushionCloth);
+    const m = new THREE.Mesh(extrudeFlat(shape, CUSHION_H, CUSHION_H, 0.004), cushionCloth);
     m.castShadow = true;
     m.receiveShadow = true;
     table.add(m);
@@ -167,14 +183,10 @@ export function buildTable(): THREE.Group {
   // Raíles de madera con el hueco de la mesa y las troneras cortadas
   const railOuterL = OUTER_L + RAIL_W;
   const railOuterW = OUTER_W + RAIL_W;
-  const railShape = new THREE.Shape([
-    new THREE.Vector2(-railOuterL, -railOuterW),
-    new THREE.Vector2(railOuterL, -railOuterW),
-    new THREE.Vector2(railOuterL, railOuterW),
-    new THREE.Vector2(-railOuterL, railOuterW),
-  ]);
+  // Esquinas exteriores redondeadas (el biselado añade 1 cm más de radio y redondea el canto)
+  const railShape = roundedRect(railOuterL - 0.01, railOuterW - 0.01, 0.08);
   railShape.holes.push(new THREE.Path(pocketContour('union')));
-  const rails = new THREE.Mesh(extrudeFlat(railShape, RAIL_H + 0.2, RAIL_H), wood);
+  const rails = new THREE.Mesh(extrudeFlat(railShape, RAIL_H + 0.2, RAIL_H, 0.01), wood);
   rails.castShadow = true;
   rails.receiveShadow = true;
   table.add(rails);
@@ -203,10 +215,9 @@ export function buildTable(): THREE.Group {
 
   // Cuerpo y patas
   const body = new THREE.Mesh(
-    new THREE.BoxGeometry(2 * railOuterL - 0.08, 0.32, 2 * railOuterW - 0.08),
-    bodyWood,
+    extrudeFlat(roundedRect(railOuterL - 0.05, railOuterW - 0.05, 0.06), 0.3, -0.2, 0.012),
+    wood, // UV en metros, como los raíles
   );
-  body.position.y = -0.36;
   body.castShadow = true;
   table.add(body);
 

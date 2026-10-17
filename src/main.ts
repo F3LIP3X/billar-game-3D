@@ -123,6 +123,10 @@ let isBreak = true;
 let shotIsBreak = false;
 let kitchenOnly = true;
 
+// Estadísticas de la partida para la pantalla de victoria
+let stats = [0, 1].map(() => ({ shots: 0, potted: 0, fouls: 0 }));
+let gameStart = 0;
+
 const cueBall = () => balls[0];
 const onTable = () => balls.filter((b) => b.body.active && b.n !== 0).map((b) => b.n);
 
@@ -150,6 +154,10 @@ function newGame() {
   ];
   current = 0;
   aimAngle = 0;
+  stats = [0, 1].map(() => ({ shots: 0, potted: 0, fouls: 0 }));
+  gameStart = performance.now();
+  controls.autoRotate = false;
+  stopConfetti();
   state = 'placing'; // saque: bola en mano detrás de la línea de cabecera
   isBreak = true;
   kitchenOnly = true;
@@ -161,11 +169,98 @@ function newGame() {
 
 // ---------- HUD ----------
 const overlay = document.querySelector<HTMLDivElement>('#overlay')!;
-const overlayTitle = document.querySelector<HTMLHeadingElement>('#overlay-title')!;
 const messageEl = document.querySelector<HTMLDivElement>('#message')!;
 const powerEl = document.querySelector<HTMLDivElement>('#power')!;
 const powerFill = document.querySelector<HTMLDivElement>('#power-fill')!;
-document.querySelector('#restart')!.addEventListener('click', newGame);
+document.querySelector('#restart')!.addEventListener('click', () => {
+  newGame();
+  setView('3d');
+});
+document.querySelector('#to-menu')!.addEventListener('click', () => {
+  newGame();
+  state = 'menu';
+  hud.hidden = true;
+  startScreen.hidden = false;
+  startScreen.classList.remove('leaving');
+  controls.autoRotate = true;
+  moveCamera(new THREE.Vector3(-2.6, 1.9, 1.8), new THREE.Vector3(0, 0, 0), BASE_FOV, true);
+});
+
+function showVictory(winner: number, shooterWon: boolean, foul: boolean) {
+  const loser = 1 - winner;
+  const group = players[winner].group;
+  document.querySelector('#winner-name')!.textContent = `¡Gana ${players[winner].name}!`;
+  document.querySelector('#win-reason')!.textContent = shooterWon
+    ? `Ha metido la 8 tras limpiar las ${group}`
+    : `${players[loser].name} metió la 8 ${foul ? 'con falta' : 'antes de tiempo'}`;
+  document.querySelectorAll<HTMLElement>('.stats [data-col]').forEach((el) => {
+    const col = Number(el.dataset.col);
+    el.classList.toggle('winner', col === winner);
+    if (el.tagName === 'TH') el.textContent = players[col].name;
+    else el.textContent = String(stats[col][el.dataset.stat as 'shots' | 'potted' | 'fouls']);
+  });
+  const secs = Math.round((performance.now() - gameStart) / 1000);
+  document.querySelector('#duration')!.textContent = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
+  overlay.hidden = false;
+  // De fondo, la cámara gira despacio alrededor de la mesa
+  controls.autoRotate = true;
+  controls.autoRotateSpeed = 0.8;
+  sounds.win();
+  startConfetti();
+}
+
+// ---------- Confeti ----------
+const confettiCanvas = document.querySelector<HTMLCanvasElement>('#confetti')!;
+const confettiCtx = confettiCanvas.getContext('2d')!;
+const CONFETTI_COLORS = ['#c9a25a', '#e8cf8f', '#2d5aa8', '#f6f1e4', '#c0392b'];
+let confetti: { x: number; y: number; vx: number; vy: number; rot: number; vr: number; w: number; h: number; color: string }[] = [];
+let confettiFrame = 0;
+
+function startConfetti() {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const dpr = Math.min(window.devicePixelRatio, 2);
+  confettiCanvas.width = innerWidth * dpr;
+  confettiCanvas.height = innerHeight * dpr;
+  confettiCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  confetti = Array.from({ length: 160 }, () => ({
+    x: innerWidth / 2 + (Math.random() - 0.5) * 120,
+    y: innerHeight * 0.35,
+    vx: (Math.random() - 0.5) * 14,
+    vy: -6 - Math.random() * 10,
+    rot: Math.random() * Math.PI,
+    vr: (Math.random() - 0.5) * 0.3,
+    w: 6 + Math.random() * 6,
+    h: 3 + Math.random() * 4,
+    color: CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)],
+  }));
+  cancelAnimationFrame(confettiFrame);
+  const tick = () => {
+    confettiCtx.clearRect(0, 0, innerWidth, innerHeight);
+    confetti = confetti.filter((c) => c.y < innerHeight + 20);
+    for (const c of confetti) {
+      c.vy += 0.25;
+      c.vx *= 0.99;
+      c.x += c.vx;
+      c.y += c.vy;
+      c.rot += c.vr;
+      confettiCtx.save();
+      confettiCtx.translate(c.x, c.y);
+      confettiCtx.rotate(c.rot);
+      confettiCtx.scale(1, Math.cos(c.rot * 2)); // el giro del papel
+      confettiCtx.fillStyle = c.color;
+      confettiCtx.fillRect(-c.w / 2, -c.h / 2, c.w, c.h);
+      confettiCtx.restore();
+    }
+    if (confetti.length) confettiFrame = requestAnimationFrame(tick);
+  };
+  tick();
+}
+
+function stopConfetti() {
+  cancelAnimationFrame(confettiFrame);
+  confetti = [];
+  confettiCtx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+}
 
 let messageTimer = 0;
 function showMessage(text: string) {
@@ -509,6 +604,7 @@ function shoot() {
   c.rx = c.vx * 2.5 * spin;
   c.rz = c.vz * 2.5 * spin;
   sounds.cue(power);
+  stats[current].shots++;
   shot = { firstHit: null, potted: [] };
   onTableBefore = onTable();
   shotIsBreak = isBreak;
@@ -522,12 +618,13 @@ function endShot() {
   const cb = cueBall();
 
   if (result.respotEight) respot(balls[8]);
+  stats[current].potted += shot.potted.filter((n) => n !== 0).length;
+  if (result.foul) stats[current].fouls++;
 
   if (result.winner !== null) {
     state = 'over';
-    overlayTitle.textContent = result.message;
-    overlay.hidden = false;
     renderHud();
+    showVictory(result.winner, result.winner === current, result.foul);
     return;
   }
 
@@ -735,5 +832,6 @@ document.querySelector('#play')!.addEventListener('click', () => {
 resize();
 newGame();
 state = 'menu';
+controls.autoRotate = true;
 camera.position.set(-2.6, 1.9, 1.8);
 frame();

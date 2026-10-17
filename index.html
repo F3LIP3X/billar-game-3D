@@ -68,9 +68,27 @@
       </div>
 
       <div id="overlay" hidden>
-        <div class="card">
-          <h2 id="overlay-title"></h2>
-          <button id="restart">Jugar otra vez</button>
+        <canvas id="confetti"></canvas>
+        <div class="victory" role="dialog" aria-labelledby="winner-name">
+          <div class="emblem" aria-hidden="true"><span>8</span></div>
+          <p class="eyebrow">Victoria</p>
+          <h2 id="winner-name"></h2>
+          <p id="win-reason"></p>
+          <table class="stats">
+            <thead>
+              <tr><th></th><th data-col="0">Jugador 1</th><th data-col="1">Jugador 2</th></tr>
+            </thead>
+            <tbody>
+              <tr><th>Tiros</th><td data-stat="shots" data-col="0"></td><td data-stat="shots" data-col="1"></td></tr>
+              <tr><th>Bolas metidas</th><td data-stat="potted" data-col="0"></td><td data-stat="potted" data-col="1"></td></tr>
+              <tr><th>Faltas</th><td data-stat="fouls" data-col="0"></td><td data-stat="fouls" data-col="1"></td></tr>
+            </tbody>
+          </table>
+          <p class="duration">Duración <span id="duration"></span></p>
+          <div class="actions">
+            <button id="restart" class="primary">Revancha</button>
+            <button id="to-menu" class="ghost">Menú</button>
+          </div>
         </div>
       </div>
     </div>

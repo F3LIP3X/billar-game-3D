@@ -26,4 +26,23 @@ export const sounds = {
   cushion: (speed: number) => click(speed / 5, 180, 0.12),
   cue: (power: number) => click(0.3 + power * 0.6, 900, 0.07),
   pocket: () => click(0.6, 120, 0.25),
+  win: () => {
+    // Arpegio ascendente (do-mi-sol-do)
+    [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => tone(f, 0.6), i * 110));
+  },
 };
+
+function tone(freq: number, decay: number) {
+  if (!ctx) return;
+  const t = ctx.currentTime;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = 'triangle';
+  osc.frequency.setValueAtTime(freq, t);
+  gain.gain.setValueAtTime(0.0001, t);
+  gain.gain.exponentialRampToValueAtTime(0.18, t + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t + decay);
+  osc.connect(gain).connect(ctx.destination);
+  osc.start(t);
+  osc.stop(t + decay);
+}
