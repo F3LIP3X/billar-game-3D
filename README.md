@@ -50,6 +50,10 @@ npm run dev
 
 - Sonidos de golpes, troneras y turno: [Pool And Billiards SFX](https://papapleygames.itch.io/pool-and-billiards) de **Suraj Kispotta** (CC0). Recortados y pasados a mono en `public/sounds/`.
 
+## Contra la máquina
+
+Botón **Contra la máquina** del menú, con tres niveles (fácil, normal, experto). El rival (`src/ai.ts`) genera tiros candidatos a cada tronera, los simula con la misma física y reglas de la partida y elige el mejor; el nivel decide cuántos prueba y cuánto error comete al ejecutarlo.
+
 ## Multijugador online
 
 Botón **Jugar online** del menú: se crea una sala con un código de 5 letras (y un enlace `?sala=CÓDIGO`) y el rival se une desde su navegador. Las salas se guardan en Firebase Realtime Database; la sesión es anónima, no hace falta cuenta.

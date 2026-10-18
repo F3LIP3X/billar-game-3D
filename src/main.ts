@@ -13,6 +13,7 @@ import { buildRoom, buildTable } from './table';
 import { ballColor, createBallMesh, createBlobShadow, createCue } from './balls';
 import { evaluateShot, groupOf, type Group, type Player, type ShotRecord } from './rules';
 import { isMuted, setMuted, sounds, unlockAudio } from './audio';
+import { planShot, type Level } from './ai';
 import { low, quality, rememberLowQuality, touch } from './quality';
 
 // Línea de cabecera: en el saque (y tras blanca dentro en el saque) la blanca va detrás de ella
@@ -201,12 +202,21 @@ let simAcc = 0; // tiempo de simulación pendiente (paso fijo)
 const q6 = (v: number) => Math.round(v * 1e6) / 1e6; // así los dos lados usan exactamente los mismos números
 const seatStr = () => String(mySeat) as '0' | '1';
 /** ¿Puede este jugador interactuar ahora? En local siempre; online solo en su turno. */
-const canAct = () => !net || (current === mySeat && state !== 'rolling' && state !== 'over' && state !== 'menu' && !remoteShot);
+// Contra la máquina: el jugador humano es el 0 y la máquina el 1
+let vsAI = false;
+let aiLevel: Level = 'normal';
+let aiGen = 0; // sube al reiniciar: cancela lo que la máquina estuviera pensando
+let aiBusy = false;
+const AI_NAMES: Record<Level, string> = { facil: 'Máquina · fácil', normal: 'Máquina', experto: 'Máquina · experta' };
+const aiTurn = () => vsAI && current === 1;
+/** ¿Es este jugador la persona que está delante de la pantalla? (solo importa online o contra la máquina) */
+const isMine = (i: number) => (net ? i === mySeat : vsAI ? i === 0 : false);
+const canAct = () =>
+  net ? current === mySeat && state !== 'rolling' && state !== 'over' && state !== 'menu' && !remoteShot : !aiTurn();
 /** Quién saca: se alterna en cada partida (online según el número de partida; en local, en cada revancha). */
 let localBreaker = 0;
 const breakerSeat = () => (net ? (Math.max(gameId, 1) - 1) % 2 : localBreaker);
-const turnText = () =>
-  net && current === mySeat ? 'Tu turno' : `Turno de ${players[current].name}`;
+const turnText = () => (isMine(current) ? 'Tu turno' : `Turno de ${players[current].name}`);
 
 function newGame() {
   for (const b of balls) {
@@ -231,7 +241,9 @@ function newGame() {
     }
   }
 
-  players = [0, 1].map((i) => ({ name: onlineNames[i] || `Jugador ${i + 1}`, group: null }));
+  players = [0, 1].map((i) => ({ name: vsAI ? (i === 0 ? 'Tú' : AI_NAMES[aiLevel]) : onlineNames[i] || `Jugador ${i + 1}`, group: null }));
+  aiGen++;
+  aiBusy = false;
   current = breakerSeat();
   aimAngle = 0;
   stats = [0, 1].map(() => ({ shots: 0, potted: 0, fouls: 0 }));
@@ -245,7 +257,7 @@ function newGame() {
   syncMeshes(0);
   renderHud();
   showMessage('Coloca la blanca detrás de la línea');
-  announceTurn(net && mySeat === current ? 'Tu saque' : `Saque de ${players[current].name}`);
+  announceTurn(isMine(current) ? 'Tu saque' : `Saque de ${players[current].name}`);
 }
 
 // ---------- HUD ----------
@@ -275,6 +287,7 @@ document.querySelector('#to-menu')!.addEventListener('click', () => goToMenu());
 
 function goToMenu() {
   if (net) void leaveOnline();
+  vsAI = false;
   newGame();
   state = 'menu';
   hud.hidden = true;
@@ -395,7 +408,7 @@ function renderHud() {
     const p = players[i];
     el.classList.toggle('active', i === current);
     el.querySelector('.name')!.textContent = p.name + (net && i === mySeat ? ' (tú)' : '');
-    el.querySelector('.turn-tag')!.textContent = net && i === mySeat ? 'Tu turno' : 'Su turno';
+    el.querySelector('.turn-tag')!.textContent = isMine(i) ? 'Tu turno' : 'Su turno';
     const left = p.group ? tableBalls.filter((n) => groupOf(n) === p.group).length : 0;
     const groupEl = el.querySelector<HTMLElement>('.group')!;
     groupEl.textContent = !p.group
@@ -1005,8 +1018,8 @@ function launchShot(m: { vx: number; vz: number; rx: number; rz: number; sw: num
   remoteAim = null;
 }
 
-function shoot() {
-  if (!canAct()) return;
+function shoot(byAI = false) {
+  if (!byAI && !canAct()) return;
   const c = cueBall().body;
   const speed = 0.25 + power * (MAX_SHOT_SPEED - 0.25);
   const vx = q6(Math.cos(aimAngle) * speed);
@@ -1209,7 +1222,7 @@ function updateAimVisuals() {
   powerEl.classList.toggle('visible', state === 'charging');
   shootBtn.disabled = !aiming || !canAct();
   kitchen.visible = state === 'placing' && kitchenOnly;
-  shootBtn.textContent = net && !canAct() && state !== 'rolling'
+  shootBtn.textContent = (net || vsAI) && !canAct() && state !== 'rolling'
     ? `Turno de ${players[current].name}`
     : state === 'placing'
       ? 'Arrastra la blanca'
@@ -1430,6 +1443,7 @@ function frame() {
 
   updateRemoteAim(dt);
   sendLocalAim();
+  aiUpdate();
 
   syncMeshes(dt);
 
@@ -1692,8 +1706,85 @@ function enterGame() {
 }
 document.querySelector('#play')!.addEventListener('click', () => {
   localBreaker = 0;
+  vsAI = false;
   enterGame();
 });
+
+// ---------- Contra la máquina ----------
+const aiSheet = document.querySelector<HTMLDivElement>('#ai-sheet')!;
+const setAiSheet = (open: boolean) => (aiSheet.hidden = !open);
+document.querySelector('#ai-btn')!.addEventListener('click', () => setAiSheet(true));
+document.querySelector('#ai-close')!.addEventListener('click', () => setAiSheet(false));
+aiSheet.addEventListener('click', (e) => e.target === aiSheet && setAiSheet(false));
+window.addEventListener('keydown', (e) => e.key === 'Escape' && !aiSheet.hidden && setAiSheet(false));
+aiSheet.querySelectorAll<HTMLButtonElement>('[data-level]').forEach((btn) =>
+  btn.addEventListener('click', () => {
+    aiLevel = btn.dataset.level as Level;
+    localBreaker = 0; // empieza sacando la persona; en las revanchas se alterna
+    vsAI = true;
+    setAiSheet(false);
+    enterGame();
+  }),
+);
+
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+/** Turno de la máquina: piensa, coloca la blanca si hace falta, apunta a la vista del jugador y tira. */
+async function runAI(gen: number) {
+  const stale = () => gen !== aiGen || state === 'menu' || state === 'over';
+  await sleep(state === 'placing' ? 900 : 1100);
+  if (stale()) return;
+  const bodies = balls.map((b) => b.body);
+  const plan = await planShot({
+    bodies,
+    players,
+    current,
+    isBreak,
+    ballInHand: state === 'placing',
+    kitchenOnly,
+    level: aiLevel,
+  });
+  if (stale()) return;
+
+  if (state === 'placing' && plan.cue) {
+    cueBall().body.x = plan.cue.x;
+    cueBall().body.z = plan.cue.z;
+    syncMeshes(0);
+    await sleep(500);
+    if (stale()) return;
+    finishPlacing();
+  }
+
+  // El taco gira hasta el ángulo elegido y se carga la fuerza antes de soltar
+  const from = aimAngle;
+  const delta = wrapAngle(plan.angle - from);
+  const turnMs = 450 + Math.min(500, Math.abs(delta) * 300);
+  const t0 = performance.now();
+  setHit(plan.side, plan.spin);
+  for (let t = 0; t < turnMs; t = performance.now() - t0) {
+    const k = Math.min(1, t / turnMs);
+    aimAngle = from + delta * (k * k * (3 - 2 * k));
+    await sleep(16);
+    if (stale()) return;
+  }
+  aimAngle = plan.angle;
+  const chargeMs = 350 + plan.power * 650;
+  const c0 = performance.now();
+  for (let t = 0; t < chargeMs; t = performance.now() - c0) {
+    power = (t / chargeMs) * plan.power;
+    await sleep(16);
+    if (stale()) return;
+  }
+  power = plan.power;
+  shoot(true);
+  aiBusy = false;
+}
+
+function aiUpdate() {
+  if (!aiTurn() || aiBusy || (state !== 'aiming' && state !== 'placing')) return;
+  aiBusy = true;
+  void runAI(aiGen);
+}
 
 // ---------- Interfaz del modo online ----------
 const onlineSheet = document.querySelector<HTMLDivElement>('#online')!;
@@ -1746,6 +1837,7 @@ function updateNetStatus() {
 function beginOnlineGame() {
   if (gameStarted) return;
   gameStarted = true;
+  vsAI = false;
   setOnlineSheet(false);
   document.body.classList.add('online');
   netStatus.hidden = false;

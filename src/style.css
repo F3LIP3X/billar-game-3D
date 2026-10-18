@@ -941,3 +941,9 @@ body.online #message { top: 64px; }
   .spin-pad { --pad: 210px; }
   .pad-hint { display: none; }
 }
+
+/* Niveles de la máquina */
+.level-list { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
+.level { width: 100%; min-height: 56px; flex-direction: column; gap: 2px; align-items: flex-start; text-align: left; padding: 10px 18px; }
+.level b { font-size: 17px; font-weight: 600; }
+.level span { font-size: 13px; font-weight: 400; opacity: 0.7; }

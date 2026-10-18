@@ -36,9 +36,10 @@
       <section class="start-panel glass" aria-labelledby="game-title">
         <div class="emblem" aria-hidden="true"><span>8</span></div>
         <h1 id="game-title" class="title">Billar <span>3D</span></h1>
-        <p class="lede">Bola 8 para dos jugadores en el mismo dispositivo. Mete tu grupo y cierra con la negra.</p>
+        <p class="lede">Bola 8 contra la máquina, un amigo o por internet. Mete tu grupo y cierra con la negra.</p>
         <div class="start-actions">
           <button id="play" class="btn btn-primary">Jugar</button>
+          <button id="ai-btn" class="btn btn-secondary" aria-haspopup="dialog">Contra la máquina</button>
           <button id="online-btn" class="btn btn-secondary" aria-haspopup="dialog">Jugar online</button>
           <button id="how-btn" class="btn btn-secondary" aria-haspopup="dialog">Cómo se juega</button>
         </div>
@@ -54,6 +55,23 @@
           LinkedIn
         </a>
       </footer>
+    </div>
+
+    <div id="ai-sheet" class="sheet-backdrop" hidden>
+      <div class="sheet glass" role="dialog" aria-modal="true" aria-labelledby="ai-title">
+        <header class="sheet-head">
+          <h2 id="ai-title">Contra la máquina</h2>
+          <button id="ai-close" class="icon-btn" aria-label="Cerrar">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </button>
+        </header>
+        <p class="muted">Elige el nivel del rival. Tú sacas primero.</p>
+        <div class="level-list">
+          <button class="btn btn-secondary level" data-level="facil"><b>Fácil</b><span>Falla bastante y no calcula</span></button>
+          <button class="btn btn-secondary level" data-level="normal"><b>Normal</b><span>Mete bolas con cabeza</span></button>
+          <button class="btn btn-secondary level" data-level="experto"><b>Experto</b><span>Casi no falla</span></button>
+        </div>
+      </div>
     </div>
 
     <div id="online" class="sheet-backdrop" hidden>
