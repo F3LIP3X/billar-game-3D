@@ -989,6 +989,7 @@ function chooseView(v: View) {
 function setView(v: View, animate = true) {
   topForPlacing = false;
   view = v;
+  controls.enableRotate = !touch && v !== '2d'; // desde arriba la mesa no gira: así no se queda torcida
   document.querySelectorAll<HTMLButtonElement>('[data-view]').forEach((b) => b.classList.toggle('on', b.dataset.view === v));
   const origin = new THREE.Vector3(0, 0, 0);
   if (v === '3d') {
