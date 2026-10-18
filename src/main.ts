@@ -13,6 +13,7 @@ import { buildRoom, buildTable } from './table';
 import { ballColor, createBallMesh, createBlobShadow, createCue } from './balls';
 import { evaluateShot, groupOf, type Group, type Player, type ShotRecord } from './rules';
 import { isMuted, setMuted, sounds, unlockAudio } from './audio';
+import { createElement, Annoyed, Bomb, Bot, BatteryLow, CircleDot, Crown, Flame, Frown, Ghost, Medal, PartyPopper, Rocket, Skull, Sparkle, Sparkles, Star, Target, ThumbsUp, Trophy, Wind, Wrench, Zap, type IconNode } from 'lucide';
 import { planShot, type Level } from './ai';
 import { low, quality, rememberLowQuality, touch } from './quality';
 
@@ -329,7 +330,7 @@ function showVictory(winner: number, shooterWon: boolean, foul: boolean) {
   sounds.win();
   startConfetti();
   document.querySelector('.victory .emblem')!.classList.add('dance');
-  rain(machineWon ? ['🤖', '🪫', '😅', '🔧'] : ['🏆', '🎱', '🎉', '🥳', '✨', '🍾'], machineWon ? 18 : 46);
+  rain(machineWon ? [Bot, BatteryLow, Wrench] : [Trophy, PartyPopper, Medal, Crown, Sparkles, Star], machineWon ? 18 : 46);
 }
 
 // ---------- Confeti ----------
@@ -388,47 +389,57 @@ function stopConfetti() {
 // ---------- Animaciones graciosas ----------
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const pick = <T,>(a: T[]) => a[Math.floor(Math.random() * a.length)];
+const FX_COLORS = ['#ffd56b', '#ff8a5c', '#7fd1ff', '#b69cff', '#7ee8a2', '#ff7aa8'];
 const fxLayer = document.createElement('div');
 fxLayer.id = 'fx';
 fxLayer.setAttribute('aria-hidden', 'true');
 document.body.append(fxLayer);
+
+/** Icono de Lucide como elemento SVG. */
+const svgIcon = (node: IconNode, size: number, stroke = 2) =>
+  createElement(node, { width: size, height: size, 'stroke-width': stroke });
 
 function fxAdd(el: HTMLElement, ms: number) {
   fxLayer.append(el);
   setTimeout(() => el.remove(), ms);
 }
 
-/** Cartel que salta en pantalla con un emoji (como el "¡STRIKE!" de los bolos). */
-function popup(emoji: string, text: string, tone: 'good' | 'bad' = 'good') {
+/** Cartel que salta en pantalla con un icono (como el "¡STRIKE!" de los bolos). */
+function popup(node: IconNode, text: string, tone: 'good' | 'bad' = 'good') {
   const el = document.createElement('div');
   el.className = `fx-pop ${tone}`;
-  el.innerHTML = `<span class="e">${emoji}</span><span class="t"></span>`;
-  el.querySelector('.t')!.textContent = text;
+  const icon = document.createElement('span');
+  icon.className = 'e';
+  icon.append(svgIcon(node, 96, 1.8));
+  const label = document.createElement('span');
+  label.className = 't';
+  label.textContent = text;
+  el.append(icon, label);
   fxAdd(el, 2000);
 }
 
-/** Explosión de emojis desde un punto de la pantalla. */
-function burst(x: number, y: number, emojis: string[], n = 7) {
+/** Explosión de iconos desde un punto de la pantalla. */
+function burst(x: number, y: number, icons: IconNode[], n = 7) {
   if (reducedMotion) return;
   for (let i = 0; i < n; i++) {
     const el = document.createElement('span');
     el.className = 'fx-bit';
-    el.textContent = pick(emojis);
+    el.append(svgIcon(pick(icons), 18 + Math.random() * 14));
     const a = -Math.PI / 2 + (Math.random() - 0.5) * 2.4;
     const v = 90 + Math.random() * 150;
-    el.style.cssText = `--x:${x}px;--y:${y}px;--dx:${Math.cos(a) * v}px;--uy:${Math.sin(a) * v}px;--dy:${120 + Math.random() * 90}px;--r:${(Math.random() - 0.5) * 540}deg;--d:${0.9 + Math.random() * 0.5}s;font-size:${18 + Math.random() * 14}px`;
+    el.style.cssText = `--x:${x}px;--y:${y}px;--dx:${Math.cos(a) * v}px;--uy:${Math.sin(a) * v}px;--dy:${120 + Math.random() * 90}px;--r:${(Math.random() - 0.5) * 540}deg;--d:${0.9 + Math.random() * 0.5}s;color:${pick(FX_COLORS)}`;
     fxAdd(el, 1600);
   }
 }
 
-/** Lluvia de emojis por toda la pantalla (victoria). */
-function rain(emojis: string[], n: number) {
+/** Lluvia de iconos por toda la pantalla (victoria). */
+function rain(icons: IconNode[], n: number) {
   if (reducedMotion) return;
   for (let i = 0; i < n; i++) {
     const el = document.createElement('span');
     el.className = 'fx-rain';
-    el.textContent = pick(emojis);
-    el.style.cssText = `--x:${Math.random() * 100}vw;--sway:${(Math.random() - 0.5) * 120}px;--r:${(Math.random() - 0.5) * 720}deg;--d:${3 + Math.random() * 2.5}s;--delay:${Math.random() * 2.5}s;font-size:${22 + Math.random() * 26}px`;
+    el.append(svgIcon(pick(icons), 22 + Math.random() * 26));
+    el.style.cssText = `--x:${Math.random() * 100}vw;--sway:${(Math.random() - 0.5) * 120}px;--r:${(Math.random() - 0.5) * 720}deg;--d:${3 + Math.random() * 2.5}s;--delay:${Math.random() * 2.5}s;color:${pick(FX_COLORS)}`;
     fxAdd(el, 8500);
   }
 }
@@ -441,14 +452,14 @@ function celebrateShot() {
   if (shot.potted.includes(8) && !shotIsBreak) return; // la 8 la resuelve la pantalla de victoria
   if (scratch) {
     sounds.sad();
-    popup(pick(['🙈', '🤦', '😬']), cheering ? pick(['¡Blanca al hoyo!', '¡Uy, uy, uy!', '¡Torpe!']) : pick(['¡La blanca dentro!', '¡Regalo!']), 'bad');
+    popup(pick([Ghost, Frown, Annoyed]), cheering ? pick(['¡Blanca al hoyo!', '¡Uy, uy, uy!', '¡Torpe!']) : pick(['¡La blanca dentro!', '¡Regalo!']), 'bad');
   } else if (objects.length) {
     sounds.boing(objects.length);
-    if (!cheering) popup(pick(['😒', '😬']), pick(['Qué suerte…', '¡Ouch!', 'Punto para el rival']), 'bad');
-    else if (shotIsBreak) popup('💥', pick(['¡Saque explosivo!', '¡Menudo estallido!']));
-    else if (objects.length >= 3) popup(pick(['🤯', '🔥']), pick(['¡SÚPER RACHA!', '¡TRIPLETE!', '¡Increíble!']));
-    else if (objects.length === 2) popup('🤩', '¡DOBLETE!');
-    else popup(pick(['😎', '🎱', '👌', '🔥']), pick(['¡Dentro!', '¡Bolazo!', '¡Plof!', '¡Qué finura!', '¡Al hoyo!']));
+    if (!cheering) popup(pick([Annoyed, Frown]), pick(['Qué suerte…', '¡Ouch!', 'Punto para el rival']), 'bad');
+    else if (shotIsBreak) popup(Bomb, pick(['¡Saque explosivo!', '¡Menudo estallido!']));
+    else if (objects.length >= 3) popup(pick([Flame, Rocket]), pick(['¡SÚPER RACHA!', '¡TRIPLETE!', '¡Increíble!']));
+    else if (objects.length === 2) popup(Crown, '¡DOBLETE!');
+    else popup(pick([ThumbsUp, Target, Sparkles, Zap]), pick(['¡Dentro!', '¡Bolazo!', '¡Plof!', '¡Qué finura!', '¡Al hoyo!']));
   }
 }
 
@@ -1456,7 +1467,7 @@ function handleSimEvents(ev: ReturnType<typeof step>) {
     const pocket = nearestPocket(body.x, body.z);
     balls[body.id].sinking = { x: pocket.x, z: pocket.z };
     const v = new THREE.Vector3(pocket.x, 0.05, pocket.z).project(camera);
-    burst(((v.x + 1) / 2) * innerWidth, ((1 - v.y) / 2) * innerHeight, body.id === 0 ? ['💨', '😵'] : ['✨', '⭐', '💫', '🎱']);
+    burst(((v.x + 1) / 2) * innerWidth, ((1 - v.y) / 2) * innerHeight, body.id === 0 ? [Wind, Skull] : [Sparkles, Star, Sparkle, CircleDot]);
   }
   if (ev.potted.length) renderHud();
 }

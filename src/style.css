@@ -957,7 +957,10 @@ body.online #message { top: 64px; }
   transform: translate(-50%, -50%);
   animation: fx-pop 1.9s both;
 }
-.fx-pop .e { font-size: clamp(60px, 15vw, 104px); line-height: 1; filter: drop-shadow(0 8px 14px rgba(0, 0, 0, 0.45)); animation: fx-wobble 0.5s ease-in-out 0.3s 3; }
+.fx-pop .e { display: block; color: #ffd56b; line-height: 0; filter: drop-shadow(0 8px 14px rgba(0, 0, 0, 0.45)); animation: fx-wobble 0.5s ease-in-out 0.3s 3; }
+.fx-pop .e svg { width: clamp(64px, 16vw, 104px); height: auto; }
+.fx-pop.bad .e { color: #9ec3ff; }
+.fx-bit svg, .fx-rain svg { display: block; filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.4)); }
 .fx-pop .t {
   font-family: var(--font-display); font-weight: 800; font-size: clamp(30px, 8.5vw, 58px); line-height: 1.05; text-align: center; white-space: nowrap;
   color: #fff3c4; letter-spacing: 0.01em;
