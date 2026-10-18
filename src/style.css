@@ -255,7 +255,9 @@ button:focus-visible, a:focus-visible {
   border-radius: 50%;
   background: var(--pc);
 }
-.player .name { font-size: 17px; font-weight: 600; color: var(--ink-2); transition: color 0.3s; }
+.player-head { min-width: 0; }
+.player .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 17px; font-weight: 600; color: var(--ink-2); transition: color 0.3s; }
+.turn-tag { flex: none; }
 .player.active .name { color: var(--ink); }
 .turn-tag {
   margin-left: auto;
@@ -322,7 +324,10 @@ button:focus-visible, a:focus-visible {
   font-family: var(--font-display);
   font-weight: 600;
   font-size: clamp(22px, 4.5vw, 32px);
-  white-space: nowrap;
+  max-width: min(90vw, 560px);
+  text-align: center;
+  overflow-wrap: anywhere;
+  border-radius: 28px;
   opacity: 0;
   pointer-events: none !important;
   transition: opacity 0.35s ease, transform 0.35s ease;
@@ -497,13 +502,14 @@ body.free-cam #scene:active { cursor: grabbing; }
   font-size: 24px;
   cursor: pointer;
 }
-#shoot-btn { min-height: 56px; padding: 0 28px; touch-action: none; user-select: none; -webkit-user-select: none; }
+#shoot-btn { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-height: 56px; padding: 0 28px; touch-action: none; user-select: none; -webkit-user-select: none; }
 #shoot-btn:disabled { opacity: 0.45; }
 
 /* ---------- Pantalla de victoria ---------- */
 #overlay {
   position: absolute;
   inset: 0;
+  z-index: 3; /* por encima de la pastilla de la sala y de los paneles */
   display: grid;
   place-items: center;
   padding: 16px;
@@ -555,14 +561,17 @@ body.free-cam #scene:active { cursor: grabbing; }
   margin: 0;
   font-family: var(--font-display);
   font-weight: 600;
-  font-size: clamp(30px, 8vw, 40px);
+  font-size: clamp(28px, 7vw, 38px);
   line-height: 1.1;
-  white-space: nowrap;
+  overflow-wrap: anywhere; /* un nombre largo sin espacios no puede salirse de la tarjeta */
+  text-wrap: balance;
 }
+.victory.long-name #winner-name { font-size: clamp(22px, 6vw, 30px); }
 #win-reason { margin: 8px 0 20px; color: var(--ink-2); font-size: 15px; }
 
 .stats {
   width: 100%;
+  table-layout: fixed;
   border-collapse: separate;
   border-spacing: 0;
   font-size: 15px;
@@ -573,7 +582,8 @@ body.free-cam #scene:active { cursor: grabbing; }
 }
 .stats th, .stats td { padding: 10px 12px; border-bottom: 1px solid var(--hairline); }
 .stats tr:last-child th, .stats tr:last-child td { border-bottom: none; }
-.stats thead th { font-size: 13px; font-weight: 600; color: var(--ink-2); white-space: nowrap; }
+.stats thead th { font-size: 13px; font-weight: 600; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stats thead th:first-child, .stats tbody th { width: 34%; }
 .stats thead th.winner { color: var(--ink); }
 .stats thead th.winner::before {
   content: '';
@@ -592,6 +602,7 @@ body.free-cam #scene:active { cursor: grabbing; }
 .duration { margin: 14px 0 20px; font-size: 13px; color: var(--ink-2); }
 .duration span { color: var(--ink); font-variant-numeric: tabular-nums; }
 .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.actions .btn { padding: 0 12px; white-space: nowrap; }
 
 @keyframes fade-in { from { opacity: 0; } }
 @keyframes card-in { from { opacity: 0; transform: translateY(20px) scale(0.96); } }

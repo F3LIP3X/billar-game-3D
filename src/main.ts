@@ -201,6 +201,9 @@ const q6 = (v: number) => Math.round(v * 1e6) / 1e6; // así los dos lados usan 
 const seatStr = () => String(mySeat) as '0' | '1';
 /** ¿Puede este jugador interactuar ahora? En local siempre; online solo en su turno. */
 const canAct = () => !net || (current === mySeat && state !== 'rolling' && state !== 'over' && state !== 'menu' && !remoteShot);
+/** Quién saca: se alterna en cada partida (online según el número de partida; en local, en cada revancha). */
+let localBreaker = 0;
+const breakerSeat = () => (net ? (Math.max(gameId, 1) - 1) % 2 : localBreaker);
 const turnText = () =>
   net && current === mySeat ? 'Tu turno' : `Turno de ${players[current].name}`;
 
@@ -228,7 +231,7 @@ function newGame() {
   }
 
   players = [0, 1].map((i) => ({ name: onlineNames[i] || `Jugador ${i + 1}`, group: null }));
-  current = 0;
+  current = breakerSeat();
   aimAngle = 0;
   stats = [0, 1].map(() => ({ shots: 0, potted: 0, fouls: 0 }));
   gameStart = performance.now();
@@ -241,7 +244,7 @@ function newGame() {
   syncMeshes(0);
   renderHud();
   showMessage('Coloca la blanca detrás de la línea');
-  announceTurn(net && mySeat === 0 ? 'Tu saque' : `Saque de ${players[0].name}`);
+  announceTurn(net && mySeat === current ? 'Tu saque' : `Saque de ${players[current].name}`);
 }
 
 // ---------- HUD ----------
@@ -259,9 +262,10 @@ restartBtn.addEventListener('click', () => {
     // Online: la revancha empieza cuando los dos la piden
     net.setRematch(true);
     restartBtn.disabled = true;
-    restartBtn.textContent = 'Esperando al rival…';
+    restartBtn.textContent = 'Esperando…';
     return;
   }
+  localBreaker = 1 - localBreaker;
   newGame();
   setView(startView, false);
   cameraForPlacing();
@@ -284,6 +288,7 @@ function showVictory(winner: number, shooterWon: boolean, foul: boolean) {
   const loser = 1 - winner;
   const group = players[winner].group;
   document.querySelector('#winner-name')!.textContent = `¡Gana ${players[winner].name}!`;
+  document.querySelector('.victory')!.classList.toggle('long-name', players[winner].name.length > 12);
   document.querySelector('#win-reason')!.textContent = shooterWon
     ? group
       ? `Ha metido la 8 tras limpiar las ${group}`
@@ -292,7 +297,10 @@ function showVictory(winner: number, shooterWon: boolean, foul: boolean) {
   document.querySelectorAll<HTMLElement>('.stats [data-col]').forEach((el) => {
     const col = Number(el.dataset.col);
     el.classList.toggle('winner', col === winner);
-    if (el.tagName === 'TH') el.textContent = players[col].name;
+    if (el.tagName === 'TH') {
+      el.textContent = players[col].name;
+      el.title = players[col].name;
+    }
     else el.textContent = String(stats[col][el.dataset.stat as 'shots' | 'potted' | 'fouls']);
   });
   const secs = Math.round((performance.now() - gameStart) / 1000);
@@ -1560,7 +1568,10 @@ function enterGame() {
   cameraForPlacing();
   if (touch) showMessage('Toca la mesa para colocar la blanca · pellizca para acercar');
 }
-document.querySelector('#play')!.addEventListener('click', enterGame);
+document.querySelector('#play')!.addEventListener('click', () => {
+  localBreaker = 0;
+  enterGame();
+});
 
 // ---------- Interfaz del modo online ----------
 const onlineSheet = document.querySelector<HTMLDivElement>('#online')!;
@@ -1656,7 +1667,7 @@ function handleRematch() {
   const rival = rematchFlags[1 - mySeat];
   const me = rematchFlags[mySeat];
   restartBtn.disabled = me;
-  restartBtn.textContent = me ? 'Esperando al rival…' : rival ? 'Aceptar revancha' : 'Revancha';
+  restartBtn.textContent = me ? 'Esperando…' : rival ? 'Aceptar revancha' : 'Revancha';
   if (net.isHost && rematchFlags[0] && rematchFlags[1]) {
     gameId += 1;
     net.setRematch(false);
