@@ -163,6 +163,17 @@ export const sounds = {
     tone(247, 0.32, 0.12, 0.16, 220);
   },
   ui: () => play('click', 0.4, { pitch: 0 }),
+  /** Bola dentro: un "boing" gracioso que sube más cuantas más bolas entran. */
+  boing(n = 1) {
+    tone(260, 0.16, 0.16, 0, 620);
+    if (n > 1) tone(390, 0.16, 0.14, 0.14, 820);
+    if (n > 2) tone(520, 0.2, 0.14, 0.28, 1100);
+  },
+  /** Blanca dentro: trombón triste. */
+  sad() {
+    [233, 220, 208].forEach((f, i) => tone(f, 0.28, 0.16, i * 0.26, f * 0.97));
+    tone(196, 0.7, 0.16, 0.8, 150);
+  },
   win() {
     if (ctx && master) playFanfare(ctx, master);
   },
