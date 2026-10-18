@@ -1221,6 +1221,9 @@ function updateAimVisuals() {
   ghost.visible = aiming || state === 'placing';
   powerEl.classList.toggle('visible', state === 'charging');
   shootBtn.disabled = !aiming || !canAct();
+  // El punto de golpeo solo se toca en tu turno: si no, se cierra en vez de ignorar los toques
+  spinBtn.disabled = !canAct();
+  if (!canAct() && !spinPop.hidden) setSpinPop(false);
   kitchen.visible = state === 'placing' && kitchenOnly;
   shootBtn.textContent = (net || vsAI) && !canAct() && state !== 'rolling'
     ? `Turno de ${players[current].name}`
