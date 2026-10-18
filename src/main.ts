@@ -7,7 +7,7 @@ import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { BALL_R, FOOT_SPOT, HEAD_SPOT, MAX_SHOT_SPEED, POCKETS, TABLE_L, TABLE_W } from './constants';
 import { castCueRay, FIXED_DT, isMoving, step, type Body } from './physics';
-import type { AimMsg, Net, NetEvents, ShotMsg, StateMsg } from './net';
+import type { AimMsg, ChatMsg, Net, NetEvents, ShotMsg, StateMsg } from './net';
 import { buildRoom, buildTable } from './table';
 import { ballColor, createBallMesh, createBlobShadow, createCue } from './balls';
 import { evaluateShot, groupOf, type Group, type Player, type ShotRecord } from './rules';
@@ -1998,7 +1998,80 @@ function handleRematch() {
   }
 }
 
+// ---------- Chat ----------
+const chatBtn = document.querySelector<HTMLButtonElement>('#chat-btn')!;
+const chatBadge = document.querySelector<HTMLSpanElement>('#chat-badge')!;
+const chatPanel = document.querySelector<HTMLElement>('#chat')!;
+const chatLog = document.querySelector<HTMLDivElement>('#chat-log')!;
+const chatForm = document.querySelector<HTMLFormElement>('#chat-form')!;
+const chatInput = document.querySelector<HTMLInputElement>('#chat-input')!;
+let chatUnread = 0;
+const chatSeen = new Set<string>();
+
+function setChat(open: boolean) {
+  chatPanel.hidden = !open;
+  chatBtn.setAttribute('aria-expanded', String(open));
+  if (open) {
+    chatUnread = 0;
+    chatBadge.hidden = true;
+    chatLog.scrollTop = chatLog.scrollHeight;
+    chatInput.focus();
+  }
+}
+chatBtn.addEventListener('click', () => setChat(chatPanel.hidden === true));
+chatPanel.addEventListener('keydown', (e) => {
+  e.stopPropagation(); // las teclas de juego (W A S D, V, F...) no deben actuar mientras se escribe
+  if (e.key === 'Escape') setChat(false);
+});
+window.addEventListener('keydown', (e) => {
+  if (net && !(e.target instanceof HTMLInputElement) && (e.key === 't' || e.key === 'T')) {
+    e.preventDefault();
+    setChat(chatPanel.hidden === true);
+  }
+});
+chatForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  if (net?.sendChat(chatInput.value)) chatInput.value = '';
+});
+chatPanel.querySelectorAll<HTMLButtonElement>('.chat-quick button').forEach((b) =>
+  b.addEventListener('click', () => net?.sendChat(b.textContent ?? '')),
+);
+
+function addChat(m: ChatMsg) {
+  if (chatSeen.has(m.id)) return;
+  chatSeen.add(m.id);
+  chatLog.querySelector('.chat-empty')?.remove();
+  const mine = Number(m.by) === mySeat;
+  const el = document.createElement('div');
+  el.className = 'chat-msg' + (mine ? ' me' : '');
+  if (mine) el.style.setProperty('--pc', PLAYER_COLORS[mySeat]);
+  if (!mine) {
+    const who = document.createElement('small');
+    who.textContent = onlineNames[Number(m.by)] || 'Rival';
+    el.append(who);
+  }
+  el.append(document.createTextNode(m.text)); // texto plano: nunca HTML
+  const atBottom = chatLog.scrollHeight - chatLog.scrollTop - chatLog.clientHeight < 40;
+  chatLog.append(el);
+  if (atBottom || mine) chatLog.scrollTop = chatLog.scrollHeight;
+  if (!mine && chatPanel.hidden) {
+    chatUnread++;
+    chatBadge.textContent = String(chatUnread);
+    chatBadge.hidden = false;
+    sounds.ui();
+  }
+}
+
+function resetChat() {
+  setChat(false);
+  chatLog.innerHTML = '<p class="chat-empty">Escribe algo a tu rival</p>';
+  chatSeen.clear();
+  chatUnread = 0;
+  chatBadge.hidden = true;
+}
+
 const netEvents: NetEvents = {
+  onChat: addChat,
   onNames(names) {
     onlineNames = names;
     players.forEach((p, i) => (p.name = names[i] || `Jugador ${i + 1}`));
@@ -2049,6 +2122,7 @@ async function leaveOnline() {
   presence = [false, false];
   rematchFlags = [false, false];
   document.body.classList.remove('online');
+  resetChat();
   netStatus.hidden = true;
   resetRematchButton();
   onlineHome.hidden = false;

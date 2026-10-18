@@ -28,6 +28,12 @@
             ".write": "auth != null && root.child('rooms').child($room).child('seats').child($seat).val() === auth.uid"
           }
         },
+        "chat": {
+          "$id": {
+            ".validate": "newData.hasChildren(['by', 'text', 't']) && (newData.child('by').val() === '0' || newData.child('by').val() === '1') && newData.child('text').isString() && newData.child('text').val().length >= 1 && newData.child('text').val().length <= 200 && newData.child('t').isNumber()",
+            ".write": "auth != null && !data.exists() && newData.exists() && root.child('rooms').child($room).child('seats').child(newData.child('by').val()).val() === auth.uid"
+          }
+        },
         "state": {
           ".write": "auth != null && ((root.child('rooms').child($room).child('host').val() === auth.uid && (!data.exists() || data.child('phase').val() === 'over')) || (data.exists() && root.child('rooms').child($room).child('seats').child(data.child('turn').val()).val() === auth.uid))"
         },

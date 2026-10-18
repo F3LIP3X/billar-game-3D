@@ -10,7 +10,11 @@ import {
   get,
   getDatabase,
   onDisconnect,
+  limitToLast,
+  onChildAdded,
   onValue,
+  push,
+  query,
   ref,
   remove,
   serverTimestamp,
@@ -64,7 +68,15 @@ export interface AimMsg {
   placing: boolean; // sigue colocando la blanca (aún no ha confirmado)
 }
 
+export interface ChatMsg {
+  id: string;
+  by: '0' | '1';
+  text: string;
+  t: number;
+}
+
 export interface NetEvents {
+  onChat(msg: ChatMsg): void;
   onNames(names: [string, string]): void;
   onPresence(present: [boolean, boolean]): void;
   onState(msg: StateMsg): void;
@@ -83,6 +95,8 @@ export interface Net {
   /** Devuelve false si se ha descartado por ir demasiado rápido. */
   sendAim(msg: AimMsg): boolean;
   setRematch(on: boolean): void;
+  /** Devuelve false si se ha descartado (vacío o demasiado rápido). */
+  sendChat(text: string): boolean;
   leave(): Promise<void>;
 }
 
@@ -196,9 +210,18 @@ function open(db: Database, code: string, seat: 0 | 1, isHost: boolean, ev: NetE
     }),
   );
 
+  // Chat: los últimos 50 mensajes y los que lleguen
+  unsubs.push(
+    onChildAdded(query(ref(db, `${base}/chat`), limitToLast(50)), (s) => {
+      const m = s.val() as { by: '0' | '1'; text: string; t: number } | null;
+      if (m && typeof m.text === 'string') ev.onChat({ id: s.key!, by: m.by, text: m.text, t: m.t });
+    }),
+  );
+
   // Escrituras: se reportan por consola si las reglas las rechazan
   const warn = (what: string) => (e: unknown) => console.warn(`No se pudo enviar ${what}`, e);
   let lastAim = 0;
+  let lastChat = 0;
 
   return {
     code,
@@ -212,6 +235,14 @@ function open(db: Database, code: string, seat: 0 | 1, isHost: boolean, ev: NetE
       if (now - lastAim < 120) return false;
       lastAim = now;
       void set(ref(db, `${base}/aim`), msg).catch(() => {});
+      return true;
+    },
+    sendChat(text) {
+      const clean = text.trim().slice(0, 200);
+      const now = performance.now();
+      if (!clean || now - lastChat < 500) return false;
+      lastChat = now;
+      void set(push(ref(db, `${base}/chat`)), { by: mine, text: clean, t: serverTimestamp() }).catch(warn('el mensaje'));
       return true;
     },
     setRematch: (on) => void set(ref(db, `${base}/rematch/${seat}`), on).catch(warn('la revancha')),
