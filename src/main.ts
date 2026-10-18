@@ -535,8 +535,6 @@ const touches = new Set<number>();
 // El taco apunta siempre al cursor. Con Shift pasa a modo de precisión: el giro es relativo
 // y mucho más lento, para afinar sin que importe lo cerca que esté el cursor de la blanca.
 let lastAimPoint: THREE.Vector3 | null = null;
-let lastAimTurn = -1;
-const PRECISION_RADIUS = 0.6; // m: por debajo de esta distancia a la blanca el ratón apunta con precisión
 const wrapAngle = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
 
 function aimOrPlace(e: PointerEvent, relative: boolean) {
@@ -546,23 +544,13 @@ function aimOrPlace(e: PointerEvent, relative: boolean) {
   const c = cueBall().body;
   if (state === 'aiming') {
     const angle = Math.atan2(p.z - c.z, p.x - c.x);
-    const dist = Math.hypot(p.x - c.x, p.z - c.z);
-    // Cada tiro empieza apuntando al cursor; después el giro es relativo al movimiento del cursor
-    const turnKey = stats[0].shots + stats[1].shots;
-    if (!relative || !lastAimPoint || turnKey !== lastAimTurn) {
-      aimAngle = angle;
-      lastAimTurn = turnKey;
-    } else if (e.shiftKey) {
+    if (relative && e.shiftKey && lastAimPoint) {
       const prev = Math.atan2(lastAimPoint.z - c.z, lastAimPoint.x - c.x);
+      const dist = Math.hypot(p.x - c.x, p.z - c.z);
       // Sensibilidad fija (no depende de la distancia): equivale a tener el cursor a 2 m
       aimAngle += wrapAngle(angle - prev) * Math.min(1, dist / 2) * 0.5;
     } else {
-      // Precisión: cerca de la blanca un pequeño movimiento giraría mucho el taco, así que el giro se
-      // reduce (de 100 % a 60 cm hasta ~4 % pegado a la bola) y solo lejos vuelve a apuntar al cursor
-      const prev = Math.atan2(lastAimPoint.z - c.z, lastAimPoint.x - c.x);
-      const t = THREE.MathUtils.clamp((dist - 0.08) / (PRECISION_RADIUS - 0.08), 0, 1);
-      const k = 0.04 + 0.96 * t * t;
-      aimAngle += wrapAngle(angle - prev) * k + wrapAngle(angle - aimAngle) * 0.08 * k * k;
+      aimAngle = angle;
     }
     lastAimPoint = p;
   } else if (state === 'placing') {
@@ -973,7 +961,6 @@ function cameraForPlacing() {
 /** La blanca queda colocada: empieza a apuntar y la cámara vuelve a la vista elegida, junto a la blanca. */
 function finishPlacing() {
   state = 'aiming';
-  lastAimPoint = null; // el primer movimiento apunta al cursor
   if (!topForPlacing) return;
   topForPlacing = false;
   if (view === 'cue') setView('cue');
@@ -1111,7 +1098,6 @@ function launchShot(m: { vx: number; vz: number; rx: number; rz: number; sw: num
   shotIsBreak = isBreak;
   isBreak = false;
   state = 'rolling';
-  lastAimPoint = null;
   power = 0;
   simAcc = 0;
   remoteAim = null;
