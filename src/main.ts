@@ -532,6 +532,7 @@ const touches = new Set<number>();
 // El taco apunta siempre al cursor. Con Shift pasa a modo de precisión: el giro es relativo
 // y mucho más lento, para afinar sin que importe lo cerca que esté el cursor de la blanca.
 let lastAimPoint: THREE.Vector3 | null = null;
+const PRECISION_RADIUS = 0.6; // m: por debajo de esta distancia a la blanca el ratón apunta con precisión
 const wrapAngle = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
 
 function aimOrPlace(e: PointerEvent, relative: boolean) {
@@ -541,11 +542,20 @@ function aimOrPlace(e: PointerEvent, relative: boolean) {
   const c = cueBall().body;
   if (state === 'aiming') {
     const angle = Math.atan2(p.z - c.z, p.x - c.x);
+    const dist = Math.hypot(p.x - c.x, p.z - c.z);
     if (relative && e.shiftKey && lastAimPoint) {
       const prev = Math.atan2(lastAimPoint.z - c.z, lastAimPoint.x - c.x);
-      const dist = Math.hypot(p.x - c.x, p.z - c.z);
       // Sensibilidad fija (no depende de la distancia): equivale a tener el cursor a 2 m
       aimAngle += wrapAngle(angle - prev) * Math.min(1, dist / 2) * 0.5;
+    } else if (relative && lastAimPoint && dist < PRECISION_RADIUS) {
+      // Con el cursor cerca de la blanca un pequeño movimiento giraría mucho el taco: modo de precisión,
+      // el giro se reduce con el cuadrado de la cercanía (a 15 cm apenas un 6 %)
+      const prev = Math.atan2(lastAimPoint.z - c.z, lastAimPoint.x - c.x);
+      const k = Math.max(0.04, (dist / PRECISION_RADIUS) ** 2);
+      aimAngle += wrapAngle(angle - prev) * k;
+    } else if (relative && lastAimPoint) {
+      // Lejos, el taco vuelve suavemente a apuntar al cursor (si venía de la zona de precisión no pega un salto)
+      aimAngle += wrapAngle(angle - aimAngle) * 0.35;
     } else {
       aimAngle = angle;
     }

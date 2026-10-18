@@ -26,15 +26,17 @@ export interface AiShot {
 
 interface Profile {
   candidates: number; // tiros que se prueban en simulación
+  refine: number; // los mejores se prueban otra vez con distinta fuerza y efecto
+  leave: boolean; // valora cómo deja la mesa (la siguiente bola propia y lo fácil que lo deja al rival)
   angleNoise: number; // desviación del ángulo al ejecutar (radianes)
   powerNoise: number; // desviación relativa de la fuerza
   pickAmong: number; // elige al azar entre los N mejores
 }
 
 const PROFILES: Record<Level, Profile> = {
-  facil: { candidates: 4, angleNoise: (3 * Math.PI) / 180, powerNoise: 0.15, pickAmong: 3 },
-  normal: { candidates: 12, angleNoise: (0.8 * Math.PI) / 180, powerNoise: 0.06, pickAmong: 1 },
-  experto: { candidates: 22, angleNoise: (0.15 * Math.PI) / 180, powerNoise: 0.02, pickAmong: 1 },
+  facil: { candidates: 4, refine: 0, leave: false, angleNoise: (3 * Math.PI) / 180, powerNoise: 0.15, pickAmong: 3 },
+  normal: { candidates: 16, refine: 3, leave: true, angleNoise: (0.8 * Math.PI) / 180, powerNoise: 0.06, pickAmong: 1 },
+  experto: { candidates: 30, refine: 7, leave: true, angleNoise: (0.15 * Math.PI) / 180, powerNoise: 0.02, pickAmong: 1 },
 };
 
 const HALF_L = TABLE_L / 2;
@@ -84,8 +86,7 @@ function pocketAim(p: { x: number; z: number }) {
   return { x: p.x - (p.x / len) * 0.035, z: p.z - (p.z / len) * 0.035 };
 }
 
-function candidatesFor(input: AiInput, origins: { x: number; z: number }[], targets: number[]): Candidate[] {
-  const { bodies } = input;
+function candidatesFor(bodies: Body[], origins: { x: number; z: number }[], targets: number[]): Candidate[] {
   const out: Candidate[] = [];
   for (const n of targets) {
     const t = bodies[n];
@@ -117,8 +118,16 @@ function candidatesFor(input: AiInput, origins: { x: number; z: number }[], targ
   return out.sort((a, b) => a.geo - b.geo);
 }
 
+/** Dificultad del tiro más fácil que tendría ese jugador con la mesa tal como está (Infinity = ninguno). */
+function bestGeo(bodies: Body[], player: Player) {
+  if (!bodies[0].active) return Infinity;
+  const targets = legalTargets(bodies, player, false);
+  const c = candidatesFor(bodies, [{ x: bodies[0].x, z: bodies[0].z }], targets);
+  return c.length ? c[0].geo : Infinity;
+}
+
 /** Juega el tiro en una copia de la mesa y lo puntúa con las mismas reglas de la partida. */
-function score(input: AiInput, c: { cue: { x: number; z: number }; angle: number; power: number }, spin: number, side: number) {
+function score(input: AiInput, c: { cue: { x: number; z: number }; angle: number; power: number }, spin: number, side: number, leave: boolean) {
   const bodies = input.bodies.map((b) => ({ ...b }));
   const cue = bodies[0];
   cue.x = c.cue.x;
@@ -147,6 +156,17 @@ function score(input: AiInput, c: { cue: { x: number; z: number }; angle: number
   if (r.winner === input.current) return 10000;
   if (r.winner !== null) return -10000;
   let s = 0;
+  if (leave && !r.foul) {
+    if (r.keepTurn) {
+      // Sigue tirando: vale más dejarse una bola fácil
+      const g = bestGeo(bodies, players[input.current]);
+      s += g === Infinity ? -40 : 70 / (1 + g * 1.5);
+    } else if (players[1 - input.current].group || bodies.filter((b) => b.active && b.id).length) {
+      // Pasa el turno: vale más dejar al rival sin tiro fácil
+      const g = bestGeo(bodies, players[1 - input.current]);
+      s -= g === Infinity ? 0 : 45 / (1 + g * 1.5);
+    }
+  }
   for (const n of rec.potted) {
     if (n === 0 || n === 8) continue;
     const mine = input.players[input.current].group;
@@ -199,35 +219,42 @@ export async function planShot(input: AiInput): Promise<AiShot> {
     origins = [{ x: bodies[0].x, z: bodies[0].z }];
   }
 
-  const geo = candidatesFor(input, origins, targets).slice(0, profile.candidates);
-  // Tiros de seguridad: tocar de lleno la bola legal más cercana si no hay nada mejor
+  const geo = candidatesFor(bodies, origins, targets).slice(0, profile.candidates);
+  // Tiros de seguridad: tocar la bola legal con suavidad, desde donde haya línea limpia
   const base = origins[0];
   const safe: Candidate[] = targets
     .map((n) => ({ n, d: Math.hypot(bodies[n].x - base.x, bodies[n].z - base.z) }))
     .sort((a, b) => a.d - b.d)
-    .slice(0, 3)
+    .slice(0, 4)
     .flatMap(({ n }) => {
-      const angle = Math.atan2(bodies[n].z - base.z, bodies[n].x - base.x);
-      return [0.3, 0.5].map((power) => ({ cue: base, angle, power, geo: 99 }));
+      const o = origins.find((q) => !blocked(bodies, q.x, q.z, bodies[n].x, bodies[n].z, [0, n], D * 0.98)) ?? base;
+      const angle = Math.atan2(bodies[n].z - o.z, bodies[n].x - o.x);
+      return [0.25, 0.4].map((power) => ({ cue: o, angle, power, geo: 99 }));
     });
 
-  const tried: { c: Candidate; s: number }[] = [];
+  const tried: { c: Candidate; spin: number; s: number }[] = [];
   let count = 0;
-  for (const c of [...geo, ...safe]) {
-    // Con la fuerza justa y con más fuerza (por si se queda corta o conviene dejar la blanca en otro sitio)
-    for (const k of [1, 1.4]) {
-      const cand = { ...c, power: Math.min(1, c.power * k) };
-      tried.push({ c: cand, s: score(input, cand, 0, 0) - c.geo * 0.5 });
-      if (++count % 3 === 0) await tick(); // que la partida no se congele mientras piensa
-    }
+  const trySim = async (c: Candidate, power: number, spin: number) => {
+    const cand = { ...c, power: Math.min(1, Math.max(0.1, power)) };
+    tried.push({ c: cand, spin, s: score(input, cand, spin, 0, profile.leave) - c.geo * 0.5 });
+    if (++count % 3 === 0) await tick(); // que la partida no se congele mientras piensa
+  };
+  for (const c of [...geo, ...safe]) await trySim(c, c.power, 0);
+
+  // Los mejores se repiten con otra fuerza y con efecto de seguir o de retroceso, que cambian dónde queda la blanca
+  const top = [...tried].sort((a, b) => b.s - a.s).slice(0, profile.refine);
+  for (const t of top) {
+    for (const k of [0.7, 1.3, 1.6]) await trySim(t.c, t.c.power * k, t.spin);
+    for (const sp of [0.35, -0.35]) await trySim(t.c, t.c.power, sp);
   }
   tried.sort((a, b) => b.s - a.s);
   const pick = tried[Math.floor(Math.random() * Math.min(profile.pickAmong, tried.length))] ?? {
     c: { cue: base, angle: 0, power: 0.4, geo: 0 },
+    spin: 0,
   };
 
   // La ejecución no es perfecta: más error cuanto más fácil es el nivel
   const angle = pick.c.angle + gauss() * profile.angleNoise;
   const power = Math.min(1, Math.max(0.12, pick.c.power * (1 + gauss() * profile.powerNoise)));
-  return { angle, power, spin: 0, side: 0, cue: input.ballInHand ? pick.c.cue : undefined };
+  return { angle, power, spin: pick.spin, side: 0, cue: input.ballInHand ? pick.c.cue : undefined };
 }
