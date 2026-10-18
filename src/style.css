@@ -30,6 +30,9 @@
 
 * { box-sizing: border-box; }
 
+/* El atributo hidden manda siempre: sin esto, cualquier regla con display lo anula */
+[hidden] { display: none !important; }
+
 html, body {
   margin: 0;
   height: 100%;
@@ -67,6 +70,9 @@ button:focus-visible, a:focus-visible {
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
 }
+
+/* Hojas y tarjetas modales: opacas del todo en calidad baja (con el desenfoque se lee bien, sin él se transparentaría lo de detrás) */
+.low .sheet.glass, .low .victory.glass { background: var(--surface-solid); }
 
 /* Botón principal (latón) y secundario (relleno neutro) */
 .btn {

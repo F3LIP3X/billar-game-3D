@@ -285,7 +285,9 @@ function showVictory(winner: number, shooterWon: boolean, foul: boolean) {
   const group = players[winner].group;
   document.querySelector('#winner-name')!.textContent = `¡Gana ${players[winner].name}!`;
   document.querySelector('#win-reason')!.textContent = shooterWon
-    ? `Ha metido la 8 tras limpiar las ${group}`
+    ? group
+      ? `Ha metido la 8 tras limpiar las ${group}`
+      : 'Ha metido la 8 y gana la partida'
     : `${players[loser].name} metió la 8 ${foul ? 'con falta' : 'antes de tiempo'}`;
   document.querySelectorAll<HTMLElement>('.stats [data-col]').forEach((el) => {
     const col = Number(el.dataset.col);
@@ -580,7 +582,10 @@ const TOP_FOV = 24; // en la vista 2D, poco ángulo para que apenas haya perspec
 function freeRect() {
   const h = window.innerHeight;
   const panel = document.querySelector<HTMLElement>('.player[data-player="0"]');
-  const top = panel?.offsetParent ? panel.getBoundingClientRect().bottom + 8 : 0;
+  let top = panel?.offsetParent ? panel.getBoundingClientRect().bottom + 8 : 0;
+  // En pantalla estrecha la pastilla de la sala online queda debajo de los paneles: la mesa no debe tapar ni pisarla
+  const pill = document.querySelector<HTMLElement>('#net-status');
+  if (pill?.offsetParent && window.innerWidth <= 600) top = Math.max(top, pill.getBoundingClientRect().bottom + 8);
   return { top, bottom: h - (bottomBarHeight() + 8) };
 }
 
@@ -1147,7 +1152,14 @@ function nearestPocket(x: number, z: number) {
   return POCKETS.reduce((a, p) => (Math.hypot(p.x - x, p.z - z) < Math.hypot(a.x - x, a.z - z) ? p : a));
 }
 
-const clock = new THREE.Clock();
+// Tiempo entre fotogramas (THREE.Clock está obsoleto)
+let lastFrameTime = performance.now();
+const frameDelta = () => {
+  const now = performance.now();
+  const d = (now - lastFrameTime) / 1000;
+  lastFrameTime = now;
+  return d;
+};
 // Contador de FPS (media de cada medio segundo)
 const fpsEl = document.querySelector<HTMLDivElement>('#fps')!;
 let fpsFrames = 0;
@@ -1264,9 +1276,12 @@ function sendLocalAim() {
   if (net.sendAim({ seq: ++aimCounter, stateSeq, by: seatStr(), ...body })) lastAimSent = key;
 }
 
+/** Tope del tiempo simulado por fotograma (solo cambia en las pruebas automáticas). */
+let maxFrameDt = 1 / 30;
+
 function frame() {
   countFps();
-  const dt = Math.min(clock.getDelta(), 1 / 30);
+  const dt = Math.min(frameDelta(), maxFrameDt);
 
   if (state === 'charging') {
     const t = ((performance.now() - chargeStart) / 1100) % 2;
@@ -1832,10 +1847,53 @@ renderer
   .catch(() => {})
   .finally(() => {
     console.info(`Shaders compilados en ${Math.round(performance.now() - compileStart)} ms`);
-    clock.getDelta(); // que el primer fotograma no cuente la espera
+    frameDelta(); // que el primer fotograma no cuente la espera
     loadedAt = performance.now();
     frame();
     console.info(`Primer fotograma a los ${Math.round(performance.now())} ms desde que se pidió la página`);
     // El recuadro de detalle se prepara un poco después, con el menú ya en marcha
     if (!low) setTimeout(prewarmPip, 2500);
   });
+
+// Acceso para las pruebas automáticas: solo existe en desarrollo, no en la web publicada
+if (import.meta.env.DEV) {
+  Object.assign(window, {
+    __billar: {
+      get state() { return state; },
+      get current() { return current; },
+      get stateSeq() { return stateSeq; },
+      get gameId() { return gameId; },
+      get mySeat() { return mySeat; },
+      canAct: () => canAct(),
+      balls: () => balls.map((b) => [b.body.x, b.body.z, b.body.active ? 1 : 0]),
+      groups: () => players.map((p) => p.group),
+      names: () => players.map((p) => p.name),
+      stats: () => stats.map((st) => [st.shots, st.potted, st.fouls]),
+      fastForward: () => (maxFrameDt = 0.25),
+      forceOver(winner: number) {
+        if (!canAct()) return false;
+        state = 'over';
+        renderHud();
+        showVictory(winner, true, false);
+        publishState(winner, true, false, '');
+        return true;
+      },
+      place(x: number, z: number) {
+        const c = cueBall().body;
+        c.x = x;
+        c.z = z;
+      },
+      confirmPlacement() {
+        if (state === 'placing' && placementValid()) finishPlacing();
+        return state;
+      },
+      fire(angle: number, pw: number, sp: number) {
+        aimAngle = angle;
+        power = pw;
+        setSpin(sp);
+        shoot();
+        return state;
+      },
+    },
+  });
+}
