@@ -45,6 +45,7 @@ export interface ShotMsg {
   vz: number;
   rx: number;
   rz: number;
+  sw: number; // efecto lateral
   cx: number; // posición de la blanca al tirar
   cz: number;
   power: number;
@@ -56,7 +57,8 @@ export interface AimMsg {
   by: '0' | '1';
   angle: number;
   power: number;
-  spin: number;
+  spin: number; // altura del golpe (seguir / retroceso)
+  side: number; // lado del golpe (efecto izquierda / derecha)
   cx: number;
   cz: number;
   placing: boolean; // sigue colocando la blanca (aún no ha confirmado)

@@ -421,6 +421,7 @@ body.free-cam #scene:active { cursor: grabbing; }
 }
 #spin:hover { background: var(--fill); }
 .spin-ball {
+  --r: 16px; /* radio de la bola en píxeles: el punto se mueve en proporción */
   position: relative;
   width: 32px;
   height: 32px;
@@ -434,9 +435,11 @@ body.free-cam #scene:active { cursor: grabbing; }
   height: 8px;
   border-radius: 50%;
   background: #c0392b;
-  transition: transform 0.15s;
+  transform: translate(calc(var(--hx, 0) * var(--r)), calc(var(--hy, 0) * var(--r)));
+  transition: transform 0.12s;
 }
-#spin-label { min-width: 70px; text-align: left; }
+/* Ancho fijo: si cambiara con el texto, la barra (centrada) se movería y arrastraría consigo el selector */
+#spin-label { width: 132px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
 
 #mute .off-icon, #mute.off .on-icon { display: none; }
 #mute.off .off-icon { display: block; }
@@ -660,6 +663,30 @@ body.free-cam #scene:active { cursor: grabbing; }
 #gfx-error[hidden] { display: none; }
 #gfx-error p { margin: 0 0 18px; font-size: 15px; line-height: 1.45; color: var(--ink-2); }
 
+/* ---------- Pantalla completa ---------- */
+#fullscreen-btn {
+  position: fixed;
+  right: 8px;
+  bottom: 24px; /* justo encima del contador de FPS */
+  z-index: 4;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--ink);
+  cursor: pointer;
+}
+#fullscreen-btn:hover { background: var(--fill-strong); }
+#fullscreen-btn .fs-exit, #fullscreen-btn.on .fs-enter { display: none; }
+#fullscreen-btn.on .fs-exit { display: block; }
+/* En móvil el borde inferior lo ocupan los controles de tiro: el botón va arriba a la derecha, bajo el de sonido */
+@media (pointer: coarse) {
+  #fullscreen-btn { top: 12px; bottom: auto; width: 40px; height: 40px; }
+  body.playing #fullscreen-btn { top: 60px; }
+}
+
 /* ---------- FPS ---------- */
 #fps {
   position: fixed;
@@ -704,7 +731,7 @@ body.free-cam #scene:active { cursor: grabbing; }
     justify-content: center;
     border-radius: 50%;
   }
-  #touch-controls .spin-ball { width: 44px; height: 44px; }
+  #touch-controls .spin-ball { --r: 22px; width: 44px; height: 44px; }
   #touch-controls #spin-label { display: none; }
   #touch-controls .fine { gap: 8px; }
   #touch-controls .fine button { width: 48px; height: 48px; }
@@ -850,4 +877,67 @@ body.online #message { top: 64px; }
 @media (max-width: 600px) {
   #net-status { top: 60px; }
   body.online #message { top: 104px; }
+}
+
+/* ---------- Selector del punto de golpeo ---------- */
+#spin-pop {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 10px);
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 18px 14px;
+  border-radius: 22px;
+  /* Ancho fijo: si cambiara con el texto, la bola se movería bajo el dedo mientras arrastras */
+  width: 216px;
+  max-width: calc(100vw - 24px);
+}
+.pop-title { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-2); }
+.spin-pad {
+  --pad: 168px;
+  position: relative;
+  width: var(--pad);
+  height: var(--pad);
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fffdf6, #e9e1cf 60%, #bfb39a);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.4), inset -6px -8px 14px rgba(0, 0, 0, 0.18);
+  touch-action: none;
+  cursor: crosshair;
+  user-select: none;
+}
+/* Límite del golpe: más allá del círculo discontinuo el taco resbalaría */
+.pad-ring { position: absolute; inset: 25%; border-radius: 50%; border: 2px dashed rgba(60, 40, 20, 0.4); pointer-events: none; }
+.pad-cross {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(rgba(60, 40, 20, 0.22), rgba(60, 40, 20, 0.22)) center / 1px 50% no-repeat,
+    linear-gradient(rgba(60, 40, 20, 0.22), rgba(60, 40, 20, 0.22)) center / 50% 1px no-repeat;
+}
+.pad-dot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 18px;
+  height: 18px;
+  margin: -9px 0 0 -9px;
+  border-radius: 50%;
+  background: #c0392b;
+  border: 2px solid #fff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+  transform: translate(calc(var(--hx, 0) * var(--pad) / 2), calc(var(--hy, 0) * var(--pad) / 2));
+  transition: transform 0.08s;
+}
+.pad-label { margin: 0; min-height: 2.6em; display: flex; align-items: center; justify-content: center; text-align: center; font-size: 15px; font-weight: 600; }
+.pad-actions { display: flex; gap: 8px; }
+.pad-hint { margin: 0; font-size: 12px; color: var(--ink-2); text-align: center; }
+@media (pointer: coarse) {
+  #spin-pop { width: 252px; }
+  .spin-pad { --pad: 210px; }
+  .pad-hint { display: none; }
 }

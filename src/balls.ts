@@ -3,7 +3,7 @@ import { BALL_R } from './constants';
 import { low } from './quality';
 
 export const BALL_COLORS: Record<number, string> = {
-  1: '#f2c230',
+  1: '#e8a600', // ámbar profundo: así la lisa se distingue de la de rayas (más clara)
   2: '#1f4fb8',
   3: '#d23a2b',
   4: '#5a2a8a',
@@ -23,7 +23,7 @@ function makeTexture(n: number): THREE.CanvasTexture {
   c.height = 512 * k;
   const g = c.getContext('2d')!;
   g.scale(k, k); // el resto se dibuja con las medidas de 1024x512
-  const ivory = '#f6f1e4';
+  const ivory = '#fbf8ef';
 
   if (n === 0) {
     g.fillStyle = ivory;
@@ -72,8 +72,10 @@ export function createBallMesh(n: number): THREE.Mesh {
     : new THREE.MeshPhysicalMaterial({ map: makeTexture(n), roughness: 0.12, clearcoat: 1, clearcoatRoughness: 0.05 });
   const mesh = new THREE.Mesh(geometry, mat);
   mesh.castShadow = true;
-  // orientación aleatoria para que no parezcan todas iguales
-  mesh.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, 0);
+  // Con el círculo del número hacia arriba (en la textura está en el ecuador): desde arriba se ve el
+  // número con la franja atravesándolo, y así las rayas se distinguen de las lisas. El giro
+  // sobre la vertical es aleatorio para que no parezcan todas iguales.
+  mesh.rotation.set(-Math.PI / 2, Math.random() * Math.PI * 2, 0, 'YXZ');
   return mesh;
 }
 

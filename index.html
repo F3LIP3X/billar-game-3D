@@ -100,7 +100,7 @@
           <h3>Reglas</h3>
           <ol class="rules">
             <li>Saca desde detrás de la línea: coloca la blanca y rompe el triángulo.</li>
-            <li>La primera bola que metas después del saque decide tu grupo: lisas (1–7) o rayadas (9–15).</li>
+            <li>Si en el saque metes bolas de un solo grupo, ese es el tuyo: lisas (1–7) o rayadas (9–15). Si entran de los dos, la mesa queda abierta y decide la primera que metas después.</li>
             <li>En cada tiro toca primero una bola de tu grupo. Si metes una tuya, sigues tirando.</li>
             <li>Si fallas, metes la blanca o tocas primero otra bola, es falta y el rival coloca la blanca donde quiera.</li>
             <li>Cuando termines tu grupo, mete la 8 para ganar. Meterla antes de tiempo o con falta pierde la partida.</li>
@@ -111,7 +111,7 @@
           <dl class="keys">
             <dt>Apuntar</dt><dd>Mueve el ratón o toca la mesa</dd>
             <dt>Tirar</dt><dd>Mantén pulsado para cargar y suelta</dd>
-            <dt>Efecto</dt><dd>↑ ↓ o la bola blanca de la barra inferior</dd>
+            <dt>Efecto</dt><dd>Toca la bola blanca de la barra y arrastra el punto, o usa W A S D</dd>
             <dt class="mouse-only">Cámara</dt><dd class="mouse-only">Clic derecho gira, rueda acerca, Ctrl la libera</dd>
             <dt class="touch-only">Zoom</dt><dd class="touch-only">Pellizca con dos dedos; en cada turno se recentra</dd>
           </dl>
@@ -162,8 +162,22 @@
           <button id="shoot-btn" class="btn btn-primary">Mantén para tirar</button>
         </div>
 
+        <div id="spin-pop" class="glass" role="dialog" aria-label="Punto de golpeo" hidden>
+          <p class="pop-title">Punto de golpeo</p>
+          <div id="spin-pad" class="spin-pad" role="application" aria-label="Arrastra para elegir dónde golpear la bola blanca">
+            <div class="pad-ring"></div>
+            <div class="pad-cross"></div>
+            <div class="pad-dot"></div>
+          </div>
+          <p id="pad-label" class="pad-label" aria-live="polite">Centro</p>
+          <div class="pad-actions">
+            <button id="pad-center" class="link-btn">Centrar</button>
+          </div>
+          <p class="pad-hint">Arriba: la bola sigue · Abajo: retrocede · Lados: efecto</p>
+        </div>
+
         <div class="toolbar glass">
-          <button id="spin" aria-label="Efecto: pulsa arriba para seguir, abajo para retroceso">
+          <button id="spin" aria-label="Punto de golpeo de la bola blanca" aria-haspopup="dialog" aria-expanded="false" aria-controls="spin-pop">
             <span class="spin-ball"><span id="spin-dot"></span></span>
             <span id="spin-label">Centro</span>
           </button>
@@ -187,12 +201,13 @@
               <dt>Ratón</dt><dd>Apuntar</dd>
               <dt>Clic mantenido</dt><dd>Cargar potencia; suelta para tirar</dd>
               <dt>Shift + ratón · ← →</dt><dd>Ajuste fino</dd>
-              <dt>↑ ↓</dt><dd>Efecto: seguir o retroceso</dd>
+              <dt>W A S D · C</dt><dd>Punto de golpeo (C lo centra)</dd>
               <dt>Clic derecho</dt><dd>Girar la cámara</dd>
               <dt>Botón central</dt><dd>Desplazar la cámara</dd>
               <dt>Rueda</dt><dd>Zoom</dd>
               <dt>Ctrl</dt><dd>Cámara libre</dd>
-              <dt>1 · 2 · V</dt><dd>Vistas 3D, 2D y tras la bola</dd>
+              <dt>1 · 2 · V</dt><dd>Vistas 3D, 2D y tras la bola (se recuerda la última)</dd>
+              <dt>F</dt><dd>Pantalla completa</dd>
               <dt>M</dt><dd>Sonido</dd>
             </dl>
           </div>
@@ -230,6 +245,10 @@
       <button id="gfx-reload" class="btn btn-primary">Recargar</button>
     </div>
 
+    <button id="fullscreen-btn" class="glass" aria-label="Pantalla completa" title="Pantalla completa (F)" hidden>
+      <svg class="fs-enter" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <svg class="fs-exit" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
     <div id="fps" aria-hidden="true"></div>
 
     <script type="module" src="/src/main.ts"></script>

@@ -10,6 +10,9 @@ export interface Body {
   // sin deslizar con su giro actual. Si coincide con (vx, vz) la bola rueda; si no, desliza.
   rx: number;
   rz: number;
+  // Efecto lateral (giro sobre el eje vertical) como velocidad del punto de la superficie de la
+  // bola: positivo = giro antihorario visto desde arriba (golpe a la derecha de la blanca).
+  sw: number;
   active: boolean; // false cuando la bola ha entrado en una tronera
 }
 
@@ -33,7 +36,11 @@ function len(x: number, z: number) {
 
 const ROLL_DECEL = 0.12; // m/s² — resistencia a la rodadura del paño
 const SLIDE_DECEL = 0.2 * 9.81; // μ·g — rozamiento bola-paño mientras desliza
-const CUSHION_SPIN_KEEP = 0.5; // parte del giro que la banda invierte junto con la bola
+const CUSHION_SPIN_KEEP = 0.5;
+const CUSHION_GRIP = 0.05; // fracción de la velocidad lateral que quita el roce de la banda
+const CUSHION_SPIN_GRIP = 0.2; // lo mismo para el efecto lateral: es lo que desvía la bola al rebotar
+const CUSHION_MU = 0.25; // límite del roce (Coulomb) frente a la fuerza del choque
+const SIDE_SPIN_DECAY = 1.6; // el paño frena el efecto lateral (m/s por segundo) // parte del giro que la banda invierte junto con la bola
 const BALL_RESTITUTION = 0.95;
 const CUSHION_RESTITUTION = 0.78;
 const STOP_SPEED = 0.004;
@@ -60,7 +67,7 @@ export function step(bodies: Body[], dt: number): StepEvents {
       collideCushions(b, events);
       if (checkPocket(b)) {
         b.active = false;
-        b.vx = b.vz = b.rx = b.rz = 0;
+        b.vx = b.vz = b.rx = b.rz = b.sw = 0;
         events.potted.push(b);
       }
     }
@@ -75,6 +82,10 @@ export function step(bodies: Body[], dt: number): StepEvents {
 }
 
 function integrate(b: Body, h: number) {
+  if (b.sw !== 0) {
+    const d = SIDE_SPIN_DECAY * h;
+    b.sw = Math.abs(b.sw) <= d ? 0 : b.sw - Math.sign(b.sw) * d;
+  }
   const ux = b.vx - b.rx; // velocidad del punto de contacto con el paño
   const uz = b.vz - b.rz;
   const u = len(ux, uz);
@@ -97,7 +108,7 @@ function integrate(b: Body, h: number) {
     const speed = len(b.vx, b.vz);
     const newSpeed = speed - ROLL_DECEL * h;
     if (newSpeed < STOP_SPEED) {
-      b.vx = b.vz = b.rx = b.rz = 0;
+      b.vx = b.vz = b.rx = b.rz = b.sw = 0;
       return;
     }
     const k = newSpeed / speed;
@@ -134,11 +145,18 @@ function collideCushions(b: Body, events: StepEvents) {
     const vn = b.vx * nx + b.vz * nz;
     if (vn < 0) {
       events.cushionHits.push(-vn);
-      // Rebote con pérdida en la normal y algo de rozamiento en la tangente
-      const tx = b.vx - vn * nx;
-      const tz = b.vz - vn * nz;
-      b.vx = tx * 0.95 - vn * CUSHION_RESTITUTION * nx;
-      b.vz = tz * 0.95 - vn * CUSHION_RESTITUTION * nz;
+      // Rebote con pérdida en la normal. A lo largo de la banda actúa el roce: quita velocidad
+      // lateral y, si la bola lleva efecto, la empuja hacia un lado (y gasta parte del efecto).
+      const tnx = -nz; // tangente de la banda
+      const tnz = nx;
+      const vt = b.vx * tnx + b.vz * tnz;
+      const pMax = CUSHION_MU * (1 + CUSHION_RESTITUTION) * -vn;
+      const p = Math.max(-pMax, Math.min(pMax, -(CUSHION_GRIP * vt + CUSHION_SPIN_GRIP * b.sw)));
+      b.sw += 2.5 * p; // una esfera maciza cambia su giro 5/2 veces más rápido que su velocidad
+      const newVt = vt + p;
+      const newVn = -vn * CUSHION_RESTITUTION;
+      b.vx = newVn * nx + newVt * tnx;
+      b.vz = newVn * nz + newVt * tnz;
       // La banda golpea por encima del centro y le da la vuelta a parte del giro
       const rn = b.rx * nx + b.rz * nz;
       if (rn < 0) {

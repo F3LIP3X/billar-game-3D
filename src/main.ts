@@ -52,7 +52,8 @@ canvas.addEventListener('webglcontextlost', (e) => {
     document.querySelector<HTMLElement>('#gfx-error')!.hidden = false;
   }
 });
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
+// Neutral conserva el color de las cosas; la curva filmica (ACES) quemaba el amarillo de las bolas hasta dejarlo casi blanco
+renderer.toneMapping = THREE.NeutralToneMapping;
 renderer.toneMappingExposure = 1.05;
 
 const scene = new THREE.Scene();
@@ -100,7 +101,7 @@ controls.autoRotate = true;
 controls.autoRotateSpeed = 0.6;
 
 scene.add(buildTable());
-const { setLampsOpacity } = buildRoom(scene);
+const { setLampsOpacity, key: keyLight } = buildRoom(scene);
 
 const cue = createCue();
 scene.add(cue);
@@ -218,7 +219,7 @@ function newGame() {
     scene.add(mesh);
     const blob = low ? createBlobShadow() : undefined;
     if (blob) scene.add(blob);
-    balls[n] = { n, body: { id: n, x, z, vx: 0, vz: 0, rx: 0, rz: 0, active: true }, mesh, blob, sinking: null };
+    balls[n] = { n, body: { id: n, x, z, vx: 0, vz: 0, rx: 0, rz: 0, sw: 0, active: true }, mesh, blob, sinking: null };
   };
 
   add(0, HEAD_SPOT.x, HEAD_SPOT.z);
@@ -277,6 +278,7 @@ function goToMenu() {
   newGame();
   state = 'menu';
   hud.hidden = true;
+  document.body.classList.remove('playing');
   startScreen.hidden = false;
   startScreen.classList.remove('leaving');
   controls.autoRotate = true;
@@ -534,25 +536,82 @@ document.querySelectorAll<HTMLButtonElement>('[data-fine]').forEach((btn) =>
   }),
 );
 
-// Efecto: altura del golpe en la blanca, de -0.5 (retroceso) a 0.5 (seguir), en radios
+// ---------- Punto de golpeo ----------
+// Dónde se golpea la blanca, en radios desde su centro: spin = altura (+ seguir, - retroceso) y
+// side = lado (+ derecha, - izquierda). Solo se puede elegir dentro de un círculo de radio 0,5:
+// más lejos del centro sería un "pifia" (el taco resbala).
 let spin = 0;
-const spinDot = document.querySelector<HTMLDivElement>('#spin-dot')!;
+let side = 0;
+const HIT_MAX = 0.5;
+const spinBtn = document.querySelector<HTMLButtonElement>('#spin')!;
 const spinLabel = document.querySelector<HTMLSpanElement>('#spin-label')!;
-function setSpin(value: number) {
-  spin = THREE.MathUtils.clamp(Math.round(value * 4) / 4, -0.5, 0.5);
-  spinDot.style.transform = `translateY(${-spin * 36}px)`;
-  spinLabel.textContent = spin > 0 ? 'Seguir' : spin < 0 ? 'Retroceso' : 'Centro';
+const spinPop = document.querySelector<HTMLDivElement>('#spin-pop')!;
+const spinPad = document.querySelector<HTMLDivElement>('#spin-pad')!;
+const padLabel = document.querySelector<HTMLParagraphElement>('#pad-label')!;
+
+function hitLabel() {
+  const parts: string[] = [];
+  if (spin > 0.09) parts.push('Seguir');
+  if (spin < -0.09) parts.push('Retroceso');
+  if (side > 0.09) parts.push('efecto derecha');
+  if (side < -0.09) parts.push('efecto izquierda');
+  return parts.length ? parts.join(' · ') : 'Centro';
 }
-document.querySelector('#spin')!.addEventListener('click', (e) => {
-  if (touch) {
-    setSpin(spin >= 0.5 ? -0.5 : spin + 0.25); // un toque pasa al siguiente valor y da la vuelta
-  } else {
-    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const up = (e as MouseEvent).clientY < r.top + r.height / 2;
-    setSpin(spin + (up ? 0.25 : -0.25));
+
+/** Fija el punto de golpeo (redondeado a 0,05 y limitado al círculo permitido). */
+function setHit(u: number, v: number) {
+  let x = Math.round(u * 20) / 20;
+  let y = Math.round(v * 20) / 20;
+  const r = Math.sqrt(x * x + y * y);
+  if (r > HIT_MAX + 1e-9) {
+    x = Math.trunc(((x * HIT_MAX) / r) * 20) / 20;
+    y = Math.trunc(((y * HIT_MAX) / r) * 20) / 20;
   }
+  side = x === 0 ? 0 : x; // evita el -0
+  spin = y === 0 ? 0 : y;
+  for (const el of [spinBtn, spinPop]) {
+    el.style.setProperty('--hx', String(side));
+    el.style.setProperty('--hy', String(-spin));
+  }
+  const text = hitLabel();
+  spinLabel.textContent = text;
+  padLabel.textContent = text;
+}
+function setSpinPop(open: boolean) {
+  spinPop.hidden = !open;
+  spinBtn.setAttribute('aria-expanded', String(open));
+}
+spinBtn.addEventListener('click', () => {
   sounds.ui();
+  setSpinPop(spinPop.hidden === true);
 });
+// Se cierra al tocar fuera, con Esc o al tirar
+window.addEventListener('pointerdown', (e) => {
+  if (!spinPop.hidden && !spinPop.contains(e.target as Node) && !spinBtn.contains(e.target as Node)) setSpinPop(false);
+});
+window.addEventListener('keydown', (e) => e.key === 'Escape' && setSpinPop(false));
+
+// Arrastrar sobre la bola grande
+let padDragging = false;
+function padFromPointer(e: PointerEvent) {
+  if (!canAct()) return;
+  const r = spinPad.getBoundingClientRect();
+  const u = (e.clientX - (r.left + r.width / 2)) / (r.width / 2);
+  const v = -(e.clientY - (r.top + r.height / 2)) / (r.height / 2);
+  // cerca del centro se pega al centro: es lo más habitual y así es fácil volver
+  if (Math.sqrt(u * u + v * v) < 0.07) setHit(0, 0);
+  else setHit(u, v);
+}
+spinPad.addEventListener('pointerdown', (e) => {
+  padDragging = true;
+  spinPad.setPointerCapture(e.pointerId);
+  padFromPointer(e);
+});
+spinPad.addEventListener('pointermove', (e) => padDragging && padFromPointer(e));
+spinPad.addEventListener('pointerup', () => (padDragging = false));
+spinPad.addEventListener('pointercancel', () => (padDragging = false));
+document.querySelector('#pad-center')!.addEventListener('click', () => canAct() && setHit(0, 0));
+setHit(0, 0);
 
 window.addEventListener('keydown', (e) => {
   if (e.target instanceof HTMLInputElement) return; // escribiendo el nombre o el código
@@ -561,12 +620,17 @@ window.addEventListener('keydown', (e) => {
     if (e.key === 'ArrowLeft') aimAngle -= delta;
     if (e.key === 'ArrowRight') aimAngle += delta;
   }
-  if (canAct() && (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W')) setSpin(spin + 0.25);
-  if (canAct() && (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S')) setSpin(spin - 0.25);
+  if (canAct()) {
+    if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') setHit(side, spin + 0.1);
+    if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') setHit(side, spin - 0.1);
+    if (e.key === 'd' || e.key === 'D') setHit(side + 0.1, spin);
+    if (e.key === 'a' || e.key === 'A') setHit(side - 0.1, spin);
+    if (e.key === 'c' || e.key === 'C') setHit(0, 0);
+  }
   if (state !== 'menu') {
-    if (e.key === 'v' || e.key === 'V') setView('cue');
-    if (e.key === '1') setView('3d');
-    if (e.key === '2') setView('2d');
+    if (e.key === 'v' || e.key === 'V') chooseView('cue');
+    if (e.key === '1') chooseView('3d');
+    if (e.key === '2') chooseView('2d');
   }
 });
 
@@ -764,7 +828,24 @@ function updateZoom(dt: number) {
 
 type View = '3d' | '2d' | 'cue';
 /** Vista con la que empieza la partida: en móvil, siempre la cenital. */
-const startView: View = touch ? '2d' : '3d';
+/** Ajustes del usuario que se recuerdan en este navegador. */
+const SETTINGS_KEY = 'billar-settings';
+function loadSettings(): { view?: View } {
+  try {
+    return JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? '{}');
+  } catch {
+    return {};
+  }
+}
+function saveSetting<K extends 'view'>(key: K, value: View) {
+  try {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify({ ...loadSettings(), [key]: value }));
+  } catch {
+    /* sin almacenamiento: no se recuerda, pero el juego sigue */
+  }
+}
+const savedView = loadSettings().view;
+const startView: View = touch ? '2d' : savedView === '2d' || savedView === 'cue' || savedView === '3d' ? savedView : '3d';
 let view: View = startView;
 /** Desde arriba; la mesa a lo largo de la pantalla según la orientación. */
 function topCamera(animate: boolean) {
@@ -787,6 +868,12 @@ function finishPlacing() {
   topForPlacing = false;
   if (view === 'cue') setView('cue');
   else focusCueBall();
+}
+
+/** El usuario elige una vista: se aplica y se recuerda para la próxima vez. */
+function chooseView(v: View) {
+  setView(v);
+  if (!touch) saveSetting('view', v); // en móvil siempre es 2D
 }
 
 function setView(v: View, animate = true) {
@@ -822,9 +909,35 @@ function chaseCamera() {
 document.querySelectorAll<HTMLButtonElement>('[data-view]').forEach((b) =>
   b.addEventListener('click', () => {
     sounds.ui();
-    setView(b.dataset.view as View);
+    chooseView(b.dataset.view as View);
   }),
 );
+
+// ---------- Pantalla completa (como F11) ----------
+const fsBtn = document.querySelector<HTMLButtonElement>('#fullscreen-btn')!;
+function updateFullscreenBtn() {
+  const on = document.fullscreenElement !== null;
+  fsBtn.classList.toggle('on', on);
+  fsBtn.setAttribute('aria-label', on ? 'Salir de pantalla completa' : 'Pantalla completa');
+  fsBtn.title = on ? 'Salir de pantalla completa (F)' : 'Pantalla completa (F)';
+}
+function toggleFullscreen() {
+  if (document.fullscreenElement) void document.exitFullscreen();
+  else void document.documentElement.requestFullscreen().catch(() => {});
+}
+// iPhone no permite pantalla completa en páginas web: sin soporte no se muestra el botón
+if (document.fullscreenEnabled) {
+  fsBtn.hidden = false;
+  fsBtn.addEventListener('click', () => {
+    sounds.ui();
+    toggleFullscreen();
+  });
+  document.addEventListener('fullscreenchange', updateFullscreenBtn);
+  window.addEventListener('keydown', (e) => {
+    if ((e.key === 'f' || e.key === 'F') && !(e.target instanceof HTMLInputElement) && !e.ctrlKey && !e.metaKey) toggleFullscreen();
+  });
+  updateFullscreenBtn();
+}
 
 // Ventana de controles: botón ?, tecla ? y se cierra con Esc o al volver a la mesa
 const helpBtn = document.querySelector<HTMLButtonElement>('#help-btn')!;
@@ -869,7 +982,7 @@ function placementValid() {
 }
 
 /** Arranca la simulación de un tiro. Lo usan el tiro propio y el del rival (online) con los mismos datos. */
-function launchShot(m: { vx: number; vz: number; rx: number; rz: number; cx: number; cz: number; power: number }) {
+function launchShot(m: { vx: number; vz: number; rx: number; rz: number; sw: number; cx: number; cz: number; power: number }) {
   const c = cueBall().body;
   c.x = m.cx;
   c.z = m.cz;
@@ -877,6 +990,9 @@ function launchShot(m: { vx: number; vz: number; rx: number; rz: number; cx: num
   c.vz = m.vz;
   c.rx = m.rx;
   c.rz = m.rz;
+  c.sw = m.sw;
+  setHit(0, 0); // tras cada tiro el punto vuelve al centro: no se queda un efecto olvidado
+  setSpinPop(false);
   sounds.cue(m.power);
   stats[current].shots++;
   shot = { firstHit: null, potted: [] };
@@ -904,6 +1020,7 @@ function shoot() {
     vz,
     rx: q6(vx * 2.5 * spin),
     rz: q6(vz * 2.5 * spin),
+    sw: q6(2.5 * speed * side), // golpe a un lado: giro vertical con la misma regla de 5/2
     cx: q6(c.x),
     cz: q6(c.z),
     power: q6(power),
@@ -965,7 +1082,7 @@ function applyState(m: StateMsg) {
     const b = ball.body;
     b.x = m.balls[n * 3];
     b.z = m.balls[n * 3 + 1];
-    b.vx = b.vz = b.rx = b.rz = 0;
+    b.vx = b.vz = b.rx = b.rz = b.sw = 0;
     b.active = m.balls[n * 3 + 2] === 1;
     ball.sinking = null;
     ball.mesh.visible = b.active;
@@ -1113,8 +1230,11 @@ function updateAimVisuals() {
 
   // Taco
   const pull = BALL_R + 0.012 + power * 0.28;
-  cue.position.set(c.x - dx * pull, BALL_R + 0.004 + spin * BALL_R, c.z - dz * pull);
-  cue.lookAt(c.x - dx * (pull + 1), BALL_R + 0.12, c.z - dz * (pull + 1));
+  // El taco apunta paralelo a la dirección de tiro, desplazado hacia el lado elegido
+  const lx = -dz * side * BALL_R;
+  const lz = dx * side * BALL_R;
+  cue.position.set(c.x + lx - dx * pull, BALL_R + 0.004 + spin * BALL_R, c.z + lz - dz * pull);
+  cue.lookAt(c.x + lx - dx * (pull + 1), BALL_R + 0.12, c.z + lz - dz * (pull + 1));
 
   // Guía hasta la bola fantasma
   const { distance, hit } = castCueRay(c, balls.map((b) => b.body), dx, dz);
@@ -1151,7 +1271,7 @@ function respot(ball: Ball) {
     balls.every((b) => b === ball || !b.body.active || Math.hypot(b.body.x - x, b.body.z) > BALL_R * 2.05);
   let x = FOOT_SPOT.x;
   while (!free(x) && x < TABLE_L / 2 - BALL_R) x += BALL_R * 0.5;
-  Object.assign(ball.body, { x, z: 0, vx: 0, vz: 0, rx: 0, rz: 0, active: true });
+  Object.assign(ball.body, { x, z: 0, vx: 0, vz: 0, rx: 0, rz: 0, sw: 0, active: true });
   ball.sinking = null;
   ball.mesh.visible = true;
 }
@@ -1258,7 +1378,7 @@ function updateRemoteAim(dt: number) {
   const k = 1 - Math.exp(-dt * 14);
   aimAngle += wrapAngle(m.angle - aimAngle) * k;
   power = m.power;
-  if (spin !== m.spin) setSpin(m.spin);
+  if (spin !== m.spin || side !== m.side) setHit(m.side ?? 0, m.spin);
   const c = cueBall().body;
   if (state === 'placing') {
     c.x += (m.cx - c.x) * k;
@@ -1275,6 +1395,7 @@ function sendLocalAim() {
     angle: Math.round(aimAngle * 1e4) / 1e4,
     power: state === 'charging' ? Math.round(power * 1e3) / 1e3 : 0,
     spin,
+    side,
     cx: q6(c.x),
     cz: q6(c.z),
     placing: state === 'placing',
@@ -1561,6 +1682,7 @@ function enterGame() {
   startScreen.classList.add('leaving');
   setTimeout(() => (startScreen.hidden = true), 600);
   hud.hidden = false;
+  document.body.classList.add('playing');
   controls.autoRotate = false;
   newGame();
   resize();
@@ -1829,7 +1951,6 @@ if (invited) {
 
 if (touch) {
   // En móvil: el efecto va junto a los botones de tiro y el sonido arriba a la derecha
-  const spinBtn = document.querySelector<HTMLElement>('#spin')!;
   spinBtn.classList.add('glass');
   document.querySelector('#touch-controls')!.prepend(spinBtn);
   document.querySelector('#hud')!.append(document.querySelector('#mute')!);
@@ -1899,10 +2020,26 @@ if (import.meta.env.DEV) {
         if (state === 'placing' && placementValid()) finishPlacing();
         return state;
       },
-      fire(angle: number, pw: number, sp: number) {
+      // ajustes de luz para probar variantes (solo desarrollo)
+      tune(o: { tone?: string; exposure?: number; spot?: number; hemi?: number; ballMul?: number; env?: number }) {
+        if (o.tone) renderer.toneMapping = { aces: THREE.ACESFilmicToneMapping, neutral: THREE.NeutralToneMapping, agx: THREE.AgXToneMapping, none: THREE.NoToneMapping }[o.tone] ?? renderer.toneMapping;
+        if (o.exposure !== undefined) renderer.toneMappingExposure = o.exposure;
+        if (o.spot !== undefined) keyLight.intensity = o.spot;
+        if (o.env !== undefined) scene.environmentIntensity = o.env;
+        if (o.ballMul !== undefined) for (const b of balls) (b.mesh.material as THREE.MeshStandardMaterial).color.setScalar(o.ballMul);
+        scene.traverse((x) => { if (x instanceof THREE.Mesh) [x.material].flat().forEach((m: THREE.Material) => (m.needsUpdate = true)); });
+      },
+      hit: () => [side, spin],
+      // posición en pantalla (px) de cada bola, para recortar capturas
+      screenBalls: () =>
+        balls.map((b) => {
+          const v = new THREE.Vector3(b.body.x, BALL_R, b.body.z).project(camera);
+          return [Math.round(((v.x + 1) / 2) * innerWidth), Math.round(((1 - v.y) / 2) * innerHeight)];
+        }),
+      fire(angle: number, pw: number, sp: number, sd = 0) {
         aimAngle = angle;
         power = pw;
-        setSpin(sp);
+        setHit(sd, sp);
         shoot();
         return state;
       },

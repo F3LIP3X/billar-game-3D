@@ -18,7 +18,8 @@ npm run dev
 - **Ratón**: apuntar
 - **Mantener clic izquierdo**: cargar potencia; soltar para tirar
 - **Shift + ratón** o **← / →**: ajuste fino del ángulo
-- **↑ / ↓**: efecto (seguir / retroceso)
+- **W A S D** (o el selector de la bola blanca): punto de golpeo — arriba sigue, abajo retrocede, lados dan efecto; **C** lo centra. Vuelve al centro tras cada tiro
+- **F**: pantalla completa. La vista elegida (3D, 2D, tras la bola) se recuerda en el navegador
 - **Clic derecho**: girar la cámara · **Botón central**: desplazar · **Rueda**: zoom suave hacia el cursor
 - **Ctrl** (mantener): cámara libre — arrastrar gira, clic derecho desplaza, rueda zoom; no interactúa con el juego
 - **1 / 2 / V** o botones: vistas 3D, 2D (desde arriba) y tras la bola
@@ -31,7 +32,7 @@ npm run dev
 ## Reglas (bola 8, basadas en las de la WPA)
 
 - Saque con bola en mano **detrás de la línea de cabecera**.
-- Tras el saque la mesa queda abierta; el grupo (lisas/rayadas) se decide con la primera bola metida legalmente después.
+- Si en el saque entran bolas de un solo grupo, ese grupo es del que saca (regla de la casa, `ASSIGN_GROUP_ON_BREAK` en `src/rules.ts`; en las reglas oficiales la mesa queda abierta). Si entran de los dos, la mesa sigue abierta y el grupo lo decide la primera bola metida después.
 - Meter la 8 en el saque no pierde: se recoloca en el punto de pie.
 - Falta (blanca dentro, no tocar bola o tocar primero una que no toca): bola en mano para el rival en cualquier sitio (tras una falta en el saque, detrás de la línea).
 - Meter la 8 con tu grupo terminado y sin falta gana; antes de tiempo o con falta, pierde.

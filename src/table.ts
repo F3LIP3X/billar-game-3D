@@ -316,5 +316,5 @@ export function buildRoom(scene: THREE.Scene) {
       if (o instanceof THREE.Mesh) (o.material as THREE.Material).opacity = opacity;
     });
   };
-  return { setLampsOpacity };
+  return { setLampsOpacity, key };
 }

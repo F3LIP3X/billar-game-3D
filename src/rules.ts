@@ -19,6 +19,9 @@ export interface ShotResult {
   message: string;
 }
 
+/** Regla de la casa: las bolas metidas en el saque (de un solo grupo) deciden el grupo. false = reglas oficiales, mesa abierta. */
+export const ASSIGN_GROUP_ON_BREAK = true;
+
 export const groupOf = (n: number): Group | null =>
   n >= 1 && n <= 7 ? 'lisas' : n >= 9 && n <= 15 ? 'rayadas' : null;
 
@@ -68,6 +71,15 @@ export function evaluateShot(
       return { foul, respotEight, keepTurn: false, winner: null, message: `${note}Falta en el saque: ${reason}. Bola en mano para ${players[other].name}` };
     }
     if (objectPotted.length > 0 || respotEight) {
+      // Regla de la casa: si en el saque entran bolas de un solo grupo, ese grupo es del que saca.
+      // (En las reglas oficiales la mesa quedaría abierta; se cambia con ASSIGN_GROUP_ON_BREAK.)
+      const potted = new Set(objectPotted.map(groupOf));
+      if (ASSIGN_GROUP_ON_BREAK && p.group === null && potted.size === 1) {
+        const group = [...potted][0] as Group;
+        p.group = group;
+        players[other].group = group === 'lisas' ? 'rayadas' : 'lisas';
+        return { foul, respotEight, keepTurn: true, winner: null, message: `${note}${p.name} mete ${group} en el saque: son suyas. Sigue tirando` };
+      }
       return { foul, respotEight, keepTurn: true, winner: null, message: `${note}${p.name} sigue tirando · mesa abierta` };
     }
     return { foul, respotEight, keepTurn: false, winner: null, message: `Turno de ${players[other].name}` };
