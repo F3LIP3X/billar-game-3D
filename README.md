@@ -47,7 +47,7 @@ npm run dev
 
 ## Créditos
 
-- Sonidos de golpes, troneras, turno y aplausos: [Pool And Billiards SFX](https://papapleygames.itch.io/pool-and-billiards) de **Suraj Kispotta** (CC0). Recortados y pasados a mono en `public/sounds/`.
+- Sonidos de golpes, troneras y turno: [Pool And Billiards SFX](https://papapleygames.itch.io/pool-and-billiards) de **Suraj Kispotta** (CC0). Recortados y pasados a mono en `public/sounds/`.
 
 ## Multijugador online
 

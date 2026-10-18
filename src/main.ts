@@ -1870,6 +1870,7 @@ if (import.meta.env.DEV) {
       names: () => players.map((p) => p.name),
       stats: () => stats.map((st) => [st.shots, st.potted, st.fouls]),
       fastForward: () => (maxFrameDt = 0.25),
+      playWin: () => sounds.win(),
       forceOver(winner: number) {
         if (!canAct()) return false;
         state = 'over';

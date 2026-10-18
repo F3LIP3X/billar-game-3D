@@ -18,7 +18,6 @@ const SAMPLE_FILES = {
   pocket: ['pocket'],
   turn: ['turn'],
   click: ['click'],
-  applause: ['applause'],
 };
 type SampleName = keyof typeof SAMPLE_FILES;
 const samples: Partial<Record<SampleName, AudioBuffer[]>> = {};
@@ -94,6 +93,60 @@ function tone(freq: number, dur: number, gain: number, delay = 0, endFreq = freq
   osc.stop(t + dur + 0.02);
 }
 
+/** Reverberación sintética: ruido que se apaga poco a poco. */
+function reverbImpulse(c: BaseAudioContext, seconds: number, decay: number) {
+  const len = Math.floor(c.sampleRate * seconds);
+  const buf = c.createBuffer(2, len, c.sampleRate);
+  for (let ch = 0; ch < 2; ch++) {
+    const data = buf.getChannelData(ch);
+    for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay);
+  }
+  return buf;
+}
+
+/**
+ * Fanfarria de victoria: arpegio ascendente de campanillas (sonido de mazo) que acaba en un
+ * acorde de Do mayor largo, con un poco de reverberación. Todo sintetizado, sin ruido de fondo.
+ */
+export function playFanfare(c: BaseAudioContext, out: AudioNode, t0 = c.currentTime) {
+  const bus = c.createGain();
+  bus.gain.value = 0.5; // margen para que las notas superpuestas no saturen
+  const dry = c.createGain();
+  dry.gain.value = 0.85;
+  const reverb = c.createConvolver();
+  reverb.buffer = reverbImpulse(c, 1.8, 3);
+  const wet = c.createGain();
+  wet.gain.value = 0.4;
+  bus.connect(dry).connect(out);
+  bus.connect(reverb).connect(wet).connect(out);
+
+  // Una nota de mazo: fundamental y parciales que se apagan a distinta velocidad
+  const note = (freq: number, start: number, dur: number, gain: number) => {
+    const partials: [number, number, number][] = [
+      [1, 1, dur],
+      [2, 0.38, dur * 0.5],
+      [3, 0.14, dur * 0.28],
+      [4.17, 0.08, 0.1], // el "golpe" metálico del principio
+    ];
+    for (const [ratio, level, decay] of partials) {
+      const osc = c.createOscillator();
+      osc.frequency.value = freq * ratio;
+      const g = c.createGain();
+      const t = t0 + start;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(gain * level, t + 0.006);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + decay);
+      osc.connect(g).connect(bus);
+      osc.start(t);
+      osc.stop(t + decay + 0.05);
+    }
+  };
+
+  [392.0, 523.25, 659.25, 783.99].forEach((f, i) => note(f, i * 0.11, 0.9, 0.5)); // Sol-Do-Mi-Sol
+  [523.25, 659.25, 783.99, 1046.5].forEach((f) => note(f, 0.5, 2.8, 0.32)); // acorde de Do mayor
+  note(261.63, 0.5, 2.8, 0.4); // Do grave de apoyo
+}
+
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
 // El oído percibe el volumen de forma logarítmica: curva para que los golpes suaves se oigan
 const loudness = (v: number) => Math.pow(clamp(v, 0, 1), 0.6);
@@ -110,6 +163,8 @@ export const sounds = {
     tone(247, 0.32, 0.12, 0.16, 220);
   },
   ui: () => play('click', 0.4, { pitch: 0 }),
-  win: () => play('applause', 0.8, { pitch: 0 }),
+  win() {
+    if (ctx && master) playFanfare(ctx, master);
+  },
 };
 
