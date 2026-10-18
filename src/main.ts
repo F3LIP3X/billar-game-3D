@@ -2006,6 +2006,8 @@ const chatLog = document.querySelector<HTMLDivElement>('#chat-log')!;
 const chatForm = document.querySelector<HTMLFormElement>('#chat-form')!;
 const chatInput = document.querySelector<HTMLInputElement>('#chat-input')!;
 let chatUnread = 0;
+const chatClouds = document.querySelector<HTMLDivElement>('#chat-clouds')!;
+const MAX_CLOUDS = 5;
 const chatSeen = new Set<string>();
 
 function setChat(open: boolean) {
@@ -2014,6 +2016,7 @@ function setChat(open: boolean) {
   if (open) {
     chatUnread = 0;
     chatBadge.hidden = true;
+    chatClouds.replaceChildren(); // al abrir el chat ya se leen ahí
     chatLog.scrollTop = chatLog.scrollHeight;
     chatInput.focus();
   }
@@ -2059,6 +2062,14 @@ function addChat(m: ChatMsg) {
     chatBadge.textContent = String(chatUnread);
     chatBadge.hidden = false;
     sounds.ui();
+    // Nube sobre el botón con el mensaje (máximo 5: al llegar otra, se va la más antigua)
+    const cloud = document.createElement('button');
+    cloud.type = 'button';
+    cloud.className = 'chat-cloud';
+    cloud.textContent = m.text;
+    cloud.addEventListener('click', () => setChat(true));
+    chatClouds.append(cloud);
+    while (chatClouds.children.length > MAX_CLOUDS) chatClouds.firstElementChild!.remove();
   }
 }
 
@@ -2068,6 +2079,7 @@ function resetChat() {
   chatSeen.clear();
   chatUnread = 0;
   chatBadge.hidden = true;
+  chatClouds.replaceChildren();
 }
 
 const netEvents: NetEvents = {
