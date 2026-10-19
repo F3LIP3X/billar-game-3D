@@ -158,6 +158,18 @@ button:focus-visible, a:focus-visible {
 }
 .title span { color: var(--brass); }
 .lede { margin: 14px 0 28px; font-size: 17px; line-height: 1.45; color: var(--ink-2); }
+.gpu-warning {
+  margin: 20px 0 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(217, 174, 95, 0.35);
+  background: rgba(217, 174, 95, 0.1);
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink);
+  text-align: left;
+}
+.gpu-warning[hidden] { display: none; }
 .start-actions { display: flex; flex-direction: column; gap: 10px; }
 .start-actions .btn { width: 100%; min-height: 50px; font-size: 17px; }
 

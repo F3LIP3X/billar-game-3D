@@ -14,7 +14,7 @@ import { evaluateShot, groupOf, type Group, type Player, type ShotRecord } from 
 import { isMuted, setMuted, sounds, unlockAudio } from './audio';
 import { CircleSlash, createElement, type IconNode } from 'lucide';
 import { planShot, type Level } from './ai';
-import { low, quality, rememberLowQuality, touch } from './quality';
+import { low, noGpu, quality, rememberLowQuality, touch } from './quality';
 
 // Línea de cabecera: en el saque (y tras blanca dentro en el saque) la blanca va detrás de ella
 const KITCHEN_X = HEAD_SPOT.x;
@@ -69,6 +69,10 @@ if (!low) {
 // En calidad baja el vidrio de la interfaz es opaco: desenfocar un lienzo 3D que se redibuja
 // en cada fotograma es muy caro en móvil
 document.documentElement.classList.toggle('low', low);
+if (noGpu && low) {
+  document.getElementById('gpu-warning')!.hidden = false;
+  console.info('Sin aceleración por GPU: calidad baja');
+}
 
 const camera = new THREE.PerspectiveCamera(42, 1, 0.02, 40);
 camera.position.set(-2.3, 1.5, 0.9);
@@ -102,7 +106,7 @@ controls.autoRotate = true;
 controls.autoRotateSpeed = 0.6;
 
 scene.add(buildTable());
-const { setLampsOpacity, key: keyLight } = buildRoom(scene);
+const { setLampsOpacity, keys: keyLights } = buildRoom(scene);
 
 const cue = createCue();
 scene.add(cue);
@@ -802,8 +806,22 @@ let camTween: {
   start: number;
 } | null = null;
 
+/**
+ * Gasta de golpe la inercia que guardan los controles (del giro automático del menú o de un arrastre).
+ * Si no, se sigue aplicando después de colocar la cámara y deja la vista cenital torcida.
+ */
+function stopControlsInertia() {
+  const { enableDamping, autoRotate } = controls;
+  controls.enableDamping = false;
+  controls.autoRotate = false;
+  controls.update(); // sin amortiguación aplica lo pendiente y lo pone a cero; la posición se sobrescribe después
+  controls.enableDamping = enableDamping;
+  controls.autoRotate = autoRotate;
+}
+
 function moveCamera(toPos: THREE.Vector3, toTarget: THREE.Vector3, toFov: number, animate: boolean) {
   zoomGoal = null;
+  stopControlsInertia();
   if (!animate) {
     camera.position.copy(toPos);
     controls.target.copy(toTarget);
@@ -2293,7 +2311,7 @@ if (import.meta.env.DEV) {
       tune(o: { tone?: string; exposure?: number; spot?: number; hemi?: number; ballMul?: number; env?: number }) {
         if (o.tone) renderer.toneMapping = { aces: THREE.ACESFilmicToneMapping, neutral: THREE.NeutralToneMapping, agx: THREE.AgXToneMapping, none: THREE.NoToneMapping }[o.tone] ?? renderer.toneMapping;
         if (o.exposure !== undefined) renderer.toneMappingExposure = o.exposure;
-        if (o.spot !== undefined) keyLight.intensity = o.spot;
+        if (o.spot !== undefined) keyLights.forEach((l) => (l.intensity = o.spot!));
         if (o.env !== undefined) scene.environmentIntensity = o.env;
         if (o.ballMul !== undefined) for (const b of balls) (b.mesh.material as THREE.MeshStandardMaterial).color.setScalar(o.ballMul);
         scene.traverse((x) => { if (x instanceof THREE.Mesh) [x.material].flat().forEach((m: THREE.Material) => (m.needsUpdate = true)); });

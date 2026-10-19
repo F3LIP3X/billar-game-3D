@@ -292,17 +292,22 @@ export function buildRoom(scene: THREE.Scene) {
   bar.position.y = 1.34;
   lamps.add(bar);
 
-  const key = new THREE.SpotLight(0xfff1d8, 16, 6, Math.PI / 3.2, 0.55, 1.4);
-  key.position.set(0, 1.2, 0);
-  key.target.position.set(0, 0, 0);
-  key.castShadow = !low;
-  key.shadow.mapSize.set(low ? 1024 : 2048, low ? 1024 : 2048);
-  key.shadow.bias = -0.0002;
-  key.shadow.radius = 4;
-  scene.add(key, key.target);
+  // Un foco por pantalla para que la luz llegue hasta las troneras de las esquinas
+  const keys = [-0.75, 0, 0.75].map((x) => {
+    // En calidad baja no hay reflejos de entorno ni brillo de tela: hace falta más luz directa
+    const spot = new THREE.SpotLight(0xfff1d8, low ? 9 : 6, 6, Math.PI / 2.8, 0.35, 1);
+    spot.position.set(x, 1.17, 0);
+    spot.target.position.set(x, 0, 0);
+    spot.castShadow = !low;
+    spot.shadow.mapSize.set(x === 0 ? 2048 : 1024, x === 0 ? 2048 : 1024);
+    spot.shadow.bias = -0.0002;
+    spot.shadow.radius = 4;
+    scene.add(spot, spot.target);
+    return spot;
+  });
 
   // Sin reflejos de entorno (calidad baja) hace falta algo más de luz ambiente
-  scene.add(new THREE.HemisphereLight(0x3a4a5a, 0x120c08, low ? 0.6 : 0.35));
+  scene.add(new THREE.HemisphereLight(0x3a4a5a, 0x120c08, low ? 1 : 0.35));
   // Materiales con transparencia para poder desvanecer las lámparas sin cortes
   lamps.traverse((o) => {
     if (o instanceof THREE.Mesh) {
@@ -316,5 +321,5 @@ export function buildRoom(scene: THREE.Scene) {
       if (o instanceof THREE.Mesh) (o.material as THREE.Material).opacity = opacity;
     });
   };
-  return { setLampsOpacity, key };
+  return { setLampsOpacity, keys };
 }

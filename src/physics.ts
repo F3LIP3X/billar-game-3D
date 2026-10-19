@@ -34,7 +34,8 @@ function len(x: number, z: number) {
   return Math.sqrt(x * x + z * z);
 }
 
-const ROLL_DECEL = 0.12; // m/s² — resistencia a la rodadura del paño
+const ROLL_DECEL = 0.2; // m/s² — resistencia a la rodadura del paño
+const ROLL_DRAG = 0.2; // 1/s — frenado extra proporcional a la velocidad (el paño se hunde más con bolas rápidas)
 const SLIDE_DECEL = 0.2 * 9.81; // μ·g — rozamiento bola-paño mientras desliza
 const CUSHION_SPIN_KEEP = 0.5;
 const CUSHION_GRIP = 0.05; // fracción de la velocidad lateral que quita el roce de la banda
@@ -43,7 +44,7 @@ const CUSHION_MU = 0.25; // límite del roce (Coulomb) frente a la fuerza del ch
 const SIDE_SPIN_DECAY = 1.6; // el paño frena el efecto lateral (m/s por segundo) // parte del giro que la banda invierte junto con la bola
 const BALL_RESTITUTION = 0.95;
 const CUSHION_RESTITUTION = 0.78;
-const STOP_SPEED = 0.004;
+const STOP_SPEED = 0.01;
 const MAX_SUBSTEP_TRAVEL = BALL_R * 0.1; // ninguna bola avanza más de esto por subpaso
 
 const HALF_L = TABLE_L / 2;
@@ -106,7 +107,7 @@ function integrate(b: Body, h: number) {
   } else {
     // Rodando: solo la resistencia a la rodadura
     const speed = len(b.vx, b.vz);
-    const newSpeed = speed - ROLL_DECEL * h;
+    const newSpeed = speed - (ROLL_DECEL + ROLL_DRAG * speed) * h;
     if (newSpeed < STOP_SPEED) {
       b.vx = b.vz = b.rx = b.rz = b.sw = 0;
       return;
@@ -119,12 +120,8 @@ function integrate(b: Body, h: number) {
   b.z += b.vz * h;
 }
 
-// Segmentos contra los que rebota la bola: la cara de cada banda y sus dos bocas.
-const SEGMENTS = CUSHIONS.flatMap(([a, b, bb, ba]) => [
-  [a, b],
-  [b, bb],
-  [ba, a],
-]);
+// Segmentos contra los que rebota la bola: la cara de cada banda, sus puntas redondeadas y sus dos bocas.
+const SEGMENTS = CUSHIONS.flatMap((line) => line.slice(1).map((p, i) => [line[i], p]));
 
 function collideCushions(b: Body, events: StepEvents) {
   for (const [[x0, z0], [x1, z1]] of SEGMENTS) {
