@@ -211,7 +211,7 @@ let vsAI = false;
 let aiLevel: Level = 'normal';
 let aiGen = 0; // sube al reiniciar: cancela lo que la máquina estuviera pensando
 let aiBusy = false;
-const AI_NAMES: Record<Level, string> = { facil: 'IA fácil', normal: 'IA', experto: 'IA experta' };
+const AI_NAMES: Record<Level, string> = { facil: 'IA Fácil', normal: 'IA Normal', experto: 'IA Experto' };
 const aiTurn = () => vsAI && current === 1;
 /** ¿Es este jugador la persona que está delante de la pantalla? (solo importa online o contra la máquina) */
 const isMine = (i: number) => (net ? i === mySeat : vsAI ? i === 0 : false);
