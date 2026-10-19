@@ -464,7 +464,7 @@ function celebrateShot() {
         ? 'Gran racha'
         : objects.length === 2
           ? 'Doblete'
-          : pick(['Dentro', 'Bien jugada', 'Limpia']);
+          : pick(['Dentro', 'Buena jugada', 'Limpia']);
     popup(objects, text, who);
   }
 }
@@ -499,17 +499,16 @@ function renderHud() {
     el.querySelector('.turn-tag')!.textContent = isMine(i) ? 'Tu turno' : 'Su turno';
     const left = p.group ? tableBalls.filter((n) => groupOf(n) === p.group).length : 0;
     const groupEl = el.querySelector<HTMLElement>('.group')!;
-    groupEl.textContent = !p.group
-      ? 'mesa abierta'
-      : left > 0
-        ? `${p.group} · quedan ${left}`
-        : `${p.group} · ¡a por la 8!`;
-    groupEl.dataset.short = !p.group ? '' : left > 0 ? `${p.group} ${left}` : '¡la 8!';
+    const groupName = p.group === 'lisas' ? 'Lisas' : 'Rayadas';
+    groupEl.textContent = !p.group ? 'Mesa abierta' : left > 0 ? groupName : 'Ahora la 8';
+    groupEl.dataset.short = !p.group ? '' : left > 0 ? `${groupName} ${left}` : 'La 8';
     const tray = el.querySelector('.tray')!;
     tray.innerHTML = '';
     if (!p.group) return;
-    for (let n = 1; n <= 15; n++) {
-      if (groupOf(n) !== p.group) continue;
+    // Marcador de cuentas: las que siguen en la mesa a la izquierda, las metidas corridas al final del alambre
+    const group = [1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14, 15].filter((n) => groupOf(n) === p.group);
+    const sorted = [...group.filter((n) => tableBalls.includes(n)), ...group.filter((n) => !tableBalls.includes(n))];
+    for (const n of sorted) {
       const chip = document.createElement('span');
       chip.className = 'chip' + (n > 8 ? ' stripe' : '') + (tableBalls.includes(n) ? '' : ' potted');
       chip.style.setProperty('--c', ballColor(n));
