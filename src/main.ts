@@ -289,6 +289,20 @@ restartBtn.addEventListener('click', () => {
 });
 document.querySelector('#to-menu')!.addEventListener('click', () => goToMenu());
 
+// Salir de la partida al menú: hay que pulsar dos veces para no perderla sin querer
+let exitArmedAt = 0;
+document.querySelectorAll<HTMLButtonElement>('.exit-btn').forEach((btn) =>
+  btn.addEventListener('click', () => {
+    if (performance.now() - exitArmedAt > 3000) {
+      exitArmedAt = performance.now();
+      showMessage('Pulsa otra vez para salir al menú');
+      return;
+    }
+    exitArmedAt = 0;
+    goToMenu();
+  }),
+);
+
 function goToMenu() {
   if (net) void leaveOnline();
   vsAI = false;
@@ -755,9 +769,10 @@ function freeRect() {
   const h = window.innerHeight;
   const panel = document.querySelector<HTMLElement>('.player[data-player="0"]');
   let top = panel?.offsetParent ? panel.getBoundingClientRect().bottom + 8 : 0;
-  // En pantalla estrecha la pastilla de la sala online queda debajo de los paneles: la mesa no debe tapar ni pisarla
-  const pill = document.querySelector<HTMLElement>('#net-status');
-  if (pill?.offsetParent && window.innerWidth <= 600) top = Math.max(top, pill.getBoundingClientRect().bottom + 8);
+  // En pantalla estrecha la pastilla de la sala online y el botón de salir quedan debajo de los paneles: la mesa no debe pisarlos
+  for (const el of document.querySelectorAll<HTMLElement>('#net-status, #hud > .exit-btn')) {
+    if (el.offsetParent && window.innerWidth <= 600) top = Math.max(top, el.getBoundingClientRect().bottom + 8);
+  }
   return { top, bottom: h - (bottomBarHeight() + 8) };
 }
 
