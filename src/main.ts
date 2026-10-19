@@ -211,7 +211,7 @@ let vsAI = false;
 let aiLevel: Level = 'normal';
 let aiGen = 0; // sube al reiniciar: cancela lo que la máquina estuviera pensando
 let aiBusy = false;
-const AI_NAMES: Record<Level, string> = { facil: 'Máquina · fácil', normal: 'Máquina', experto: 'Máquina · experta' };
+const AI_NAMES: Record<Level, string> = { facil: 'IA fácil', normal: 'IA', experto: 'IA experta' };
 const aiTurn = () => vsAI && current === 1;
 /** ¿Es este jugador la persona que está delante de la pantalla? (solo importa online o contra la máquina) */
 const isMine = (i: number) => (net ? i === mySeat : vsAI ? i === 0 : false);
@@ -305,7 +305,7 @@ function goToMenu() {
 
 function showVictory(winner: number, shooterWon: boolean, foul: boolean) {
   const machineWon = vsAI && winner === 1;
-  document.querySelector('.victory .eyebrow')!.textContent = machineWon ? 'Gana la máquina' : vsAI ? '¡Le has ganado a la máquina!' : 'Victoria';
+  document.querySelector('.victory .eyebrow')!.textContent = machineWon ? 'Gana la IA' : vsAI ? '¡Le has ganado a la IA!' : 'Victoria';
   const loser = 1 - winner;
   const group = players[winner].group;
   document.querySelector('#winner-name')!.textContent = `¡Gana ${players[winner].name}!`;
