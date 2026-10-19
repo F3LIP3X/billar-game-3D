@@ -851,6 +851,12 @@ body.free-cam #scene:active { cursor: grabbing; }
 .field input::placeholder, .join-row input::placeholder { color: var(--ink-2); font-weight: 400; }
 #online-home .btn, #online-wait .btn { width: 100%; }
 .or { margin: 18px 0 12px; text-align: center; font-size: 13px; color: var(--ink-2); }
+/* Con enlace de invitación solo se ofrece unirse a esa sala */
+#online-home.invited #create-room, #online-home.invited .or, #online-home.invited .join-row { display: none; }
+#online-home:not(.invited) .invite-only { display: none; }
+.invite-intro { margin-bottom: 14px; }
+.invite-intro b { color: var(--ink); letter-spacing: 0.15em; }
+.invite-other { margin: 14px 0 0; text-align: center; }
 .join-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
 .join-row input { text-transform: uppercase; letter-spacing: 0.25em; text-align: center; }
 .form-error { margin: 12px 0 0; font-size: 14px; color: #ff9a8f; }

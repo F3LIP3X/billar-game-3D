@@ -90,10 +90,12 @@
         </header>
 
         <div id="online-home">
+          <p class="muted invite-only invite-intro">Te han invitado a la sala <b id="invite-code"></b></p>
           <label class="field">
             <span>Tu nombre</span>
             <input id="online-name" maxlength="20" autocomplete="nickname" placeholder="Jugador" />
           </label>
+          <button id="accept-invite" class="btn btn-primary invite-only">Unirse a la sala</button>
           <button id="create-room" class="btn btn-primary">Crear sala</button>
           <p class="or"><span>o únete a la sala de un amigo</span></p>
           <div class="join-row">
@@ -101,6 +103,7 @@
             <button id="join-room" class="btn btn-secondary">Unirse</button>
           </div>
           <p id="online-error" class="form-error" role="alert" hidden></p>
+          <p class="invite-only invite-other"><button id="invite-other" class="link-btn">Crear una sala nueva</button></p>
         </div>
 
         <div id="online-wait" hidden>

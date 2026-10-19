@@ -1938,6 +1938,7 @@ const waitText = document.querySelector<HTMLParagraphElement>('#wait-text')!;
 const copyBtn = document.querySelector<HTMLButtonElement>('#copy-link')!;
 const createBtn = document.querySelector<HTMLButtonElement>('#create-room')!;
 const joinBtn = document.querySelector<HTMLButtonElement>('#join-room')!;
+const acceptBtn = document.querySelector<HTMLButtonElement>('#accept-invite')!;
 const netStatus = document.querySelector<HTMLDivElement>('#net-status')!;
 const netText = document.querySelector<HTMLSpanElement>('#net-text')!;
 const netLeave = document.querySelector<HTMLButtonElement>('#net-leave')!;
@@ -2173,6 +2174,7 @@ async function leaveOnline() {
   resetRematchButton();
   onlineHome.hidden = false;
   onlineWait.hidden = true;
+  if (onlineHome.classList.contains('invited')) setInvite(null);
   await n?.leave();
 }
 
@@ -2184,7 +2186,7 @@ async function openRoom(kind: 'create' | 'join') {
     /* sin almacenamiento */
   }
   onlineError.hidden = true;
-  createBtn.disabled = joinBtn.disabled = true;
+  createBtn.disabled = joinBtn.disabled = acceptBtn.disabled = true;
   unlockAudio();
   try {
     const mod = await import('./net'); // el SDK de Firebase solo se descarga al entrar en el modo online
@@ -2211,7 +2213,7 @@ async function openRoom(kind: 'create' | 'join') {
         : 'No se pudo conectar. Comprueba tu conexión e inténtalo de nuevo.',
     );
   } finally {
-    createBtn.disabled = joinBtn.disabled = false;
+    createBtn.disabled = joinBtn.disabled = acceptBtn.disabled = false;
   }
 }
 
@@ -2259,10 +2261,21 @@ netLeave.addEventListener('click', () => {
   goToMenu();
 });
 
-// Enlace de invitación: ?sala=ABCDE abre la hoja con el código ya escrito
-const invited = new URLSearchParams(location.search).get('sala');
+// Enlace de invitación: ?sala=ABCDE abre la hoja solo con la opción de unirse a esa sala
+function setInvite(code: string | null) {
+  onlineHome.classList.toggle('invited', !!code);
+  codeInput.value = code ?? '';
+  document.querySelector('#invite-code')!.textContent = code ?? '';
+  if (!code) history.replaceState(null, '', location.pathname);
+}
+acceptBtn.addEventListener('click', () => void openRoom('join'));
+document.querySelector('#invite-other')!.addEventListener('click', () => {
+  setInvite(null);
+  nameInput.focus();
+});
+const invited = new URLSearchParams(location.search).get('sala')?.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5);
 if (invited) {
-  codeInput.value = invited.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5);
+  setInvite(invited);
   setOnlineSheet(true);
 }
 
