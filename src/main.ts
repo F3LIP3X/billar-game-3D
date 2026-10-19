@@ -13,7 +13,7 @@ import { ballColor, createBallMesh, createBlobShadow, createCue } from './balls'
 import { evaluateShot, groupOf, type Group, type Player, type ShotRecord } from './rules';
 import { isMuted, setMuted, sounds, unlockAudio } from './audio';
 import { CircleSlash, createElement, type IconNode } from 'lucide';
-import { planShot, type Level } from './ai';
+import type { AiInput, AiShot, Level } from './ai';
 import { low, noGpu, quality, rememberLowQuality, touch } from './quality';
 
 // Línea de cabecera: en el saque (y tras blanca dentro en el saque) la blanca va detrás de ella
@@ -1413,6 +1413,7 @@ const fpsEl = document.querySelector<HTMLDivElement>('#fps')!;
 let fpsFrames = 0;
 let fpsSince = performance.now();
 let loadedAt = performance.now();
+let aiThinking = false;
 let slowWindows = 0;
 let fastWindows = 0;
 let lastDrop = 0;
@@ -1437,7 +1438,11 @@ function degradeGraphics() {
 /** Resolución dinámica: si los FPS caen se baja la resolución del lienzo; si sobran, se vuelve a subir. */
 function adaptResolution(fps: number) {
   const now = performance.now();
-  if (now - loadedAt < 3000) return; // el arranque compila shaders y no cuenta
+  // El arranque compila shaders, y mientras la máquina piensa o la pestaña está oculta los FPS no son reales
+  if (now - loadedAt < 3000 || aiThinking || document.hidden) {
+    slowWindows = 0;
+    return;
+  }
   if (fps < 40) {
     fastWindows = 0;
     if (++slowWindows >= 2) {
@@ -1839,11 +1844,19 @@ aiSheet.querySelectorAll<HTMLButtonElement>('[data-level]').forEach((btn) =>
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 /** Turno de la máquina: piensa, coloca la blanca si hace falta, apunta a la vista del jugador y tira. */
+const aiWorker = new Worker(new URL('./ai.worker.ts', import.meta.url), { type: 'module' });
+const planShot = (input: AiInput) =>
+  new Promise<AiShot>((resolve) => {
+    aiWorker.onmessage = (e: MessageEvent<AiShot>) => resolve(e.data);
+    aiWorker.postMessage(input);
+  });
+
 async function runAI(gen: number) {
   const stale = () => gen !== aiGen || state === 'menu' || state === 'over';
   await sleep(state === 'placing' ? 900 : 1100);
   if (stale()) return;
   const bodies = balls.map((b) => b.body);
+  aiThinking = true;
   const plan = await planShot({
     bodies,
     players,
@@ -1852,6 +1865,9 @@ async function runAI(gen: number) {
     ballInHand: state === 'placing',
     kitchenOnly,
     level: aiLevel,
+  }).finally(() => {
+    aiThinking = false;
+    loadedAt = performance.now(); // los FPS de mientras pensaba no cuentan
   });
   if (stale()) return;
 

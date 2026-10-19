@@ -233,11 +233,19 @@ export async function planShot(input: AiInput): Promise<AiShot> {
     });
 
   const tried: { c: Candidate; spin: number; s: number }[] = [];
-  let count = 0;
   const trySim = async (c: Candidate, power: number, spin: number) => {
     const cand = { ...c, power: Math.min(1, Math.max(0.1, power)) };
-    tried.push({ c: cand, spin, s: score(input, cand, spin, 0, profile.leave) - c.geo * 0.5 });
-    if (++count % 3 === 0) await tick(); // que la partida no se congele mientras piensa
+    // También se prueba un poco desviado a cada lado (el error con el que va a tirar): así descarta
+    // los tiros que solo entran rozando la punta de la banda y elige los que entran por el centro de la boca.
+    const d = Math.max(profile.angleNoise, (0.25 * Math.PI) / 180);
+    let s = score(input, cand, spin, 0, profile.leave);
+    if (s > 0 && c.geo < 99) {
+      const left = score(input, { ...cand, angle: cand.angle - d }, spin, 0, false);
+      const right = score(input, { ...cand, angle: cand.angle + d }, spin, 0, false);
+      s = s * 0.5 + Math.min(left, right) * 0.5;
+    }
+    tried.push({ c: cand, spin, s: s - c.geo * 0.5 });
+    await tick(); // que la partida no se congele mientras piensa
   };
   for (const c of [...geo, ...safe]) await trySim(c, c.power, 0);
 
