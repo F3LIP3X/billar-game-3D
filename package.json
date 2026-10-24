@@ -20,5 +20,8 @@
     "firebase": "^13.0.0",
     "lucide": "^1.59.0",
     "three": "^0.186.1"
+  },
+  "overrides": {
+    "@grpc/grpc-js": "^1.14.0"
   }
 }
