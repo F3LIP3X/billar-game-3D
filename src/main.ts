@@ -173,6 +173,7 @@ let onTableBefore: number[] = [];
 let isBreak = true;
 let shotIsBreak = false;
 let kitchenOnly = true;
+let assist = true; // guía de tiro (modo fácil)
 
 // Color de cada jugador: panel, aviso de turno y guía de tiro
 const PLAYER_COLORS = ['#e2b65e', '#6aa6ff'];
@@ -501,6 +502,83 @@ function announceTurn(text: string) {
   clearTimeout(bannerTimer);
   bannerTimer = window.setTimeout(() => turnBanner.classList.remove('show'), 1600);
   guide.material.color.set(PLAYER_COLORS[current]);
+}
+
+// ---------- Reloj de turno ----------
+const TURN_SECONDS = 30;
+const RING_LEN = 2 * Math.PI * 15; // longitud del círculo del anillo (r = 15)
+const turnTimerEl = document.querySelector<HTMLDivElement>('#turn-timer')!;
+const timerRing = document.querySelector<SVGCircleElement>('#timer-ring')!;
+const timerNum = document.querySelector<HTMLSpanElement>('#timer-num')!;
+const timerLabel = document.querySelector<HTMLSpanElement>('#timer-label')!;
+timerRing.style.strokeDasharray = String(RING_LEN);
+let turnDeadline = 0; // 0 = reloj parado
+let timerPlayer = -1;
+let timerShown = -1; // último segundo mostrado
+
+/** Se acabó el tiempo: pasa el turno al rival (online lo ejecuta quien tiene el turno y lo publica). */
+function turnTimeout() {
+  power = 0;
+  setHit(0, 0);
+  setSpinPop(false);
+  if (state === 'charging') state = 'aiming'; // si estaba cargando, se cancela
+  current = 1 - current;
+  const msg = `Tiempo agotado · turno de ${players[current].name}`;
+  sounds.foul();
+  showMessage(msg);
+  renderHud();
+  announceTurn(turnText());
+  afterTurnCamera();
+  publishState(-1, false, false, msg);
+}
+
+/** Coloca el reloj bajo la tarjeta del jugador que tira (sin salirse de la pantalla). */
+function placeTimer() {
+  const card = document.querySelector<HTMLElement>(`.player[data-player="${current}"]`);
+  if (!card || card.getClientRects().length === 0) return;
+  const r = card.getBoundingClientRect();
+  const half = turnTimerEl.offsetWidth / 2;
+  const x = Math.min(innerWidth - half - 8, Math.max(half + 8, r.left + r.width / 2));
+  turnTimerEl.style.left = `${x}px`;
+  turnTimerEl.style.top = `${r.bottom + 8}px`;
+}
+
+function updateTurnTimer() {
+  const running = (state === 'aiming' || state === 'charging' || state === 'placing') && !aiTurn();
+  if (!running) {
+    if (turnDeadline) {
+      turnDeadline = 0;
+      timerPlayer = -1;
+      turnTimerEl.classList.remove('on', 'warn', 'danger');
+    }
+    return;
+  }
+  const now = performance.now();
+  // Reloj nuevo: empieza un turno (o cambia el jugador)
+  if (!turnDeadline || timerPlayer !== current) {
+    turnDeadline = now + TURN_SECONDS * 1000;
+    timerPlayer = current;
+    timerShown = -1;
+    turnTimerEl.style.setProperty('--pc', PLAYER_COLORS[current]);
+    timerLabel.textContent = isMine(current) ? 'Tu tiempo' : players[current].name;
+    turnTimerEl.classList.add('on');
+  }
+  placeTimer();
+  const left = Math.max(0, (turnDeadline - now) / 1000);
+  timerRing.style.strokeDashoffset = String(RING_LEN * (1 - left / TURN_SECONDS));
+  const secs = Math.ceil(left);
+  if (secs !== timerShown) {
+    timerShown = secs;
+    timerNum.textContent = String(secs);
+    turnTimerEl.classList.toggle('warn', left <= 10);
+    turnTimerEl.classList.toggle('danger', left <= 5);
+    // Tic en los últimos 5 segundos, solo para quien está jugando
+    if (secs > 0 && secs <= 5 && (!(net || vsAI) || isMine(current))) sounds.ui();
+  }
+  if (left <= 0 && (!net || canAct())) {
+    turnDeadline = 0;
+    turnTimeout();
+  }
 }
 
 function renderHud() {
@@ -1335,8 +1413,8 @@ function updateAimVisuals() {
   const aiming = state === 'aiming' || state === 'charging';
   const c = cueBall().body;
   cue.visible = aiming;
-  guide.visible = objectGuide.visible = cueGuide.visible = aiming;
-  ghost.visible = aiming || state === 'placing';
+  guide.visible = objectGuide.visible = cueGuide.visible = aiming && assist;
+  ghost.visible = (aiming && assist) || state === 'placing'; // al colocar la blanca siempre se ve
   powerEl.classList.toggle('visible', state === 'charging');
   shootBtn.disabled = !aiming || !canAct();
   // El punto de golpeo solo se toca en tu turno: si no, se cierra en vez de ignorar los toques
@@ -1371,6 +1449,7 @@ function updateAimVisuals() {
   cue.lookAt(c.x + lx - dx * (pull + 1), BALL_R + 0.12, c.z + lz - dz * (pull + 1));
 
   // Guía hasta la bola fantasma
+  if (!assist) return; // modo difícil: ni línea, ni bola fantasma, ni trayectorias
   const { distance, hit } = castCueRay(c, balls.map((b) => b.body), dx, dz);
   const gx = c.x + dx * distance;
   const gz = c.z + dz * distance;
@@ -1572,6 +1651,7 @@ function frame() {
   updateRemoteAim(dt);
   sendLocalAim();
   aiUpdate();
+  updateTurnTimer();
 
   syncMeshes(dt);
 
@@ -1832,11 +1912,27 @@ function enterGame() {
   cameraForPlacing();
   if (touch) showMessage('Toca la mesa para colocar la blanca · pellizca para acercar');
 }
+
+// Jugar → menú de dificultad (con o sin guía de tiro)
+const modeSheet = document.querySelector<HTMLDivElement>('#mode-sheet')!;
+const setModeSheet = (open: boolean) => (modeSheet.hidden = !open);
 document.querySelector('#play')!.addEventListener('click', () => {
-  localBreaker = 0;
-  vsAI = false;
-  enterGame();
+  unlockAudio();
+  sounds.ui();
+  setModeSheet(true);
 });
+document.querySelector('#mode-close')!.addEventListener('click', () => setModeSheet(false));
+modeSheet.addEventListener('click', (e) => e.target === modeSheet && setModeSheet(false));
+window.addEventListener('keydown', (e) => e.key === 'Escape' && !modeSheet.hidden && setModeSheet(false));
+modeSheet.querySelectorAll<HTMLButtonElement>('[data-assist]').forEach((btn) =>
+  btn.addEventListener('click', () => {
+    assist = btn.dataset.assist === 'on';
+    localBreaker = 0;
+    vsAI = false;
+    setModeSheet(false);
+    enterGame();
+  }),
+);
 
 // ---------- Contra la máquina ----------
 const aiSheet = document.querySelector<HTMLDivElement>('#ai-sheet')!;
@@ -1978,6 +2074,7 @@ function beginOnlineGame() {
   if (gameStarted) return;
   gameStarted = true;
   vsAI = false;
+  assist = true;
   setOnlineSheet(false);
   document.body.classList.add('online');
   netStatus.hidden = false;

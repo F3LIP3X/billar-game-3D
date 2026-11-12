@@ -62,6 +62,21 @@
         </a>
       </footer>
     </div>
+    <div id="mode-sheet" class="sheet-backdrop" hidden>
+      <div class="sheet glass" role="dialog" aria-modal="true" aria-labelledby="mode-title">
+        <header class="sheet-head">
+          <h2 id="mode-title">Elige la dificultad</h2>
+          <button id="mode-close" class="icon-btn" aria-label="Cerrar">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </button>
+        </header>
+        <p class="muted">Partida para dos jugadores en el mismo dispositivo.</p>
+        <div class="level-list">
+          <button class="btn btn-secondary level" data-assist="on"><b>Fácil</b><span>Con guía: dirección de tiro y trayectoria de la bola</span></button>
+          <button class="btn btn-secondary level" data-assist="off"><b>Difícil</b><span>Sin ayudas: apuntas a ojo</span></button>
+        </div>
+      </div>
+    </div>
 
     <div id="ai-sheet" class="sheet-backdrop" hidden>
       <div class="sheet glass" role="dialog" aria-modal="true" aria-labelledby="ai-title">
@@ -131,6 +146,7 @@
             <li>En cada tiro toca primero una bola de tu grupo. Si metes una tuya, sigues tirando.</li>
             <li>Si fallas, metes la blanca o tocas primero otra bola, es falta y el rival coloca la blanca donde quiera.</li>
             <li>Cuando termines tu grupo, mete la 8 para ganar. Meterla antes de tiempo o con falta pierde la partida.</li>
+            <li>Tienes 30 segundos por turno. Si se acaba el tiempo, pasa el turno al rival.</li>
           </ol>
         </section>
         <section>
@@ -150,6 +166,16 @@
     <div id="hud" hidden>
       <div id="message" class="glass" role="status"></div>
       <div id="turn-banner" class="glass" aria-live="polite"></div>
+      <div id="turn-timer" class="glass" role="timer" aria-live="off">
+        <div class="timer-dial">
+          <svg viewBox="0 0 36 36" aria-hidden="true">
+            <circle class="timer-track" cx="18" cy="18" r="15" />
+            <circle id="timer-ring" class="timer-ring" cx="18" cy="18" r="15" />
+          </svg>
+          <span id="timer-num">30</span>
+        </div>
+        <span id="timer-label">Tu tiempo</span>
+      </div>
       <div id="net-status" class="glass" hidden>
         <span class="net-dot" aria-hidden="true"></span>
         <span id="net-text"></span>
