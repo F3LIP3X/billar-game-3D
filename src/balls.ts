@@ -95,10 +95,10 @@ function canvasTexture(w: number, h: number, draw: (g: CanvasRenderingContext2D)
 // En las texturas del taco, x = alrededor del taco y y = a lo largo (arriba = hacia la culata).
 const rand = (a: number, b: number) => a + Math.random() * (b - a);
 
-/** Arce: veta fina a lo largo del taco. */
-function mapleTexture() {
+/** Madera clara: veta fina a lo largo del taco. */
+function mapleTexture(base = '#e4cc98') {
   return canvasTexture(512, 64, (g) => {
-    g.fillStyle = '#e4cc98';
+    g.fillStyle = base;
     g.fillRect(0, 0, 512, 64);
     for (let i = 0; i < 140; i++) {
       g.fillStyle = `rgba(${Math.random() < 0.5 ? '150,105,50' : '255,240,205'},${rand(0.04, 0.14)})`;
@@ -107,11 +107,11 @@ function mapleTexture() {
   });
 }
 
-/** Antebrazo de arce con cuatro picos de ébano ribeteados de chapa, de la empuñadura hacia la unión. */
-function forearmTexture() {
+/** Antebrazo de madera clara con cuatro picos oscuros ribeteados de chapa, de la empuñadura hacia la unión. */
+function forearmTexture(base = '#e4cc98', dark = '#17100c') {
   return canvasTexture(512, 512, (g) => {
-    g.drawImage(mapleTexture().image as HTMLCanvasElement, 0, 0, 512, 512);
-    const veneers: [string, number][] = [['#f3ead6', 16], ['#9c2a22', 11], ['#f3ead6', 6], ['#17100c', 0]];
+    g.drawImage(mapleTexture(base).image as HTMLCanvasElement, 0, 0, 512, 512);
+    const veneers: [string, number][] = [['#f3ead6', 16], ['#9c2a22', 11], ['#f3ead6', 6], [dark, 0]];
     for (let k = 0; k < 4; k++) {
       const cx = 64 + k * 128;
       for (const [color, pad] of veneers) {
@@ -124,7 +124,7 @@ function forearmTexture() {
         g.fill();
       }
     }
-    // Veta suave del ébano
+    // Veta suave de la madera oscura
     for (let i = 0; i < 90; i++) {
       g.fillStyle = `rgba(90,60,40,${rand(0.05, 0.15)})`;
       g.fillRect(rand(0, 512), 0, 1, rand(80, 400));
@@ -168,13 +168,17 @@ function ringsTexture(base: string, ring: string, bands: [number, number][], gra
   });
 }
 
+// Colores originales del palo: madera clara (eje y antebrazo) y madera oscura (picos, anillos y culata)
+const CUE_C1 = '#e4cc98';
+const CUE_C2 = '#17100c';
+
 /**
- * Taco de billar: suela con tiza, virola, eje de arce, unión de acero, antebrazo con picos,
- * empuñadura de lino, culata de ébano con anillos y contera de goma. La punta está en z = 0 y
+ * Taco de billar: suela con tiza, virola, eje, unión de acero, antebrazo con picos,
+ * empuñadura de lino, culata con anillos y contera de goma. La punta está en z = 0 y
  * el taco sigue hacia +z. Cada pieza es un perfil torneado (radio a lo largo de z) cerrado por los dos extremos.
+ * c1 = madera clara (eje, antebrazo); c2 = madera oscura (picos, anillos, culata).
  */
-export function createCue(): THREE.Group {
-  const cue = new THREE.Group();
+function fillCue(cue: THREE.Group, c1: string, c2: string) {
   const wood = (map: THREE.Texture) =>
     low
       ? new THREE.MeshStandardMaterial({ map, roughness: 0.45 })
@@ -190,24 +194,24 @@ export function createCue(): THREE.Group {
     { profile: [[0.0062, 0.0026], [0.0063, 0.011]], mat: new THREE.MeshStandardMaterial({ color: 0x5a3a22, roughness: 0.8 }) },
     { profile: [[0.0064, 0.011], [0.0064, 0.033]], mat: low ? new THREE.MeshStandardMaterial({ color: 0xf1ead9, roughness: 0.35 }) : new THREE.MeshPhysicalMaterial({ color: 0xf1ead9, roughness: 0.3, clearcoat: 0.5 }) },
     // Eje: estrechamiento progresivo, casi recto en los primeros 30 cm
-    { profile: [[0.0064, 0.033], [0.0066, 0.33], [0.0083, 0.56], [0.0102, 0.733]], mat: wood(mapleTexture()) },
+    { profile: [[0.0064, 0.033], [0.0066, 0.33], [0.0083, 0.56], [0.0102, 0.733]], mat: wood(mapleTexture(c1)) },
     // Unión de acero
     {
       profile: [[0.0105, 0.733], [0.0106, 0.745]],
       mat: new THREE.MeshStandardMaterial({ color: 0xc9ccd1, metalness: low ? 0.5 : 0.95, roughness: 0.22 }),
     },
-    { profile: [[0.0106, 0.745], [0.0107, 0.762]], mat: wood(ringsTexture('#f1ead9', '#17100c', [[0.25, 0.35], [0.65, 0.75]])) },
+    { profile: [[0.0106, 0.745], [0.0107, 0.762]], mat: wood(ringsTexture('#f1ead9', c2, [[0.25, 0.35], [0.65, 0.75]])) },
     // Antebrazo con picos
-    { profile: [[0.0107, 0.762], [0.0119, 1.06]], mat: wood(forearmTexture()) },
-    { profile: [[0.0119, 1.06], [0.012, 1.068]], mat: wood(ringsTexture('#17100c', '#f1ead9', [[0.3, 0.7]])) },
+    { profile: [[0.0107, 0.762], [0.0119, 1.06]], mat: wood(forearmTexture(c1, c2)) },
+    { profile: [[0.0119, 1.06], [0.012, 1.068]], mat: wood(ringsTexture(c2, '#f1ead9', [[0.3, 0.7]])) },
     // Empuñadura de lino
     {
       profile: [[0.0119, 1.068], [0.0121, 1.32]],
       mat: new THREE.MeshStandardMaterial({ map: linen, roughness: 0.92 }),
     },
-    { profile: [[0.0121, 1.32], [0.0122, 1.328]], mat: wood(ringsTexture('#17100c', '#f1ead9', [[0.3, 0.7]])) },
-    // Culata de ébano con anillos de marfil
-    { profile: [[0.0122, 1.328], [0.0129, 1.455]], mat: wood(ringsTexture('#1a120d', '#efe6d2', [[0.12, 0.14], [0.17, 0.19], [0.9, 0.93]], true)) },
+    { profile: [[0.0121, 1.32], [0.0122, 1.328]], mat: wood(ringsTexture(c2, '#f1ead9', [[0.3, 0.7]])) },
+    // Culata con anillos de marfil
+    { profile: [[0.0122, 1.328], [0.0129, 1.455]], mat: wood(ringsTexture(c2, '#efe6d2', [[0.12, 0.14], [0.17, 0.19], [0.9, 0.93]], true)) },
     { profile: [[0.0129, 1.455], [0.0127, 1.464], [0.0105, 1.472], [0, 1.474]], mat: new THREE.MeshStandardMaterial({ color: 0x0d0d0e, roughness: 0.7 }) },
   ];
   for (const { profile, mat } of pieces) {
@@ -225,7 +229,25 @@ export function createCue(): THREE.Group {
     m.castShadow = true;
     cue.add(m);
   }
+}
+
+export function createCue(c1 = CUE_C1, c2 = CUE_C2): THREE.Group {
+  const cue = new THREE.Group();
+  fillCue(cue, c1, c2);
   return cue;
+}
+
+/** Cambia los colores del palo: se rehacen sus piezas dentro del mismo grupo y se liberan las antiguas. */
+export function setCueColors(cue: THREE.Group, c1: string, c2: string) {
+  for (const child of [...cue.children]) {
+    cue.remove(child);
+    const m = child as THREE.Mesh;
+    m.geometry.dispose();
+    const mat = m.material as THREE.MeshStandardMaterial;
+    mat.map?.dispose();
+    mat.dispose();
+  }
+  fillCue(cue, c1, c2);
 }
 
 /**
