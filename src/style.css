@@ -1097,7 +1097,6 @@ body.online #chat-clouds {
 }
 
 /* ---------- Reloj de turno ---------- */
-/* ---------- Reloj de turno ---------- */
 #turn-timer {
   position: fixed; /* left y top los calcula main.ts bajo la tarjeta del jugador activo */
   z-index: 5;

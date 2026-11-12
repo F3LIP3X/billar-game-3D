@@ -1651,6 +1651,7 @@ function frame() {
   updateRemoteAim(dt);
   sendLocalAim();
   aiUpdate();
+  updateTurnTimer();
 
   syncMeshes(dt);
 
@@ -1676,10 +1677,6 @@ function frame() {
   renderer.render(scene, camera);
   renderPip(dt);
   requestAnimationFrame(frame);
-    updateRemoteAim(dt);
-  sendLocalAim();
-  aiUpdate();
-  updateTurnTimer();
 }
 
 /**
