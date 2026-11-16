@@ -327,7 +327,7 @@ function goToMenu() {
   startScreen.classList.remove('leaving');
   controls.autoRotate = true;
   applyMenuOffset();
-  moveCamera(new THREE.Vector3(-2.6, 1.9, 1.8), new THREE.Vector3(0, 0, 0), BASE_FOV, true);
+  moveCamera(MENU_CAMERA.clone(), new THREE.Vector3(0, 0, 0), BASE_FOV, true);
 }
 
 function showVictory(winner: number, shooterWon: boolean, foul: boolean) {
@@ -723,6 +723,7 @@ canvas.addEventListener('pointermove', (e) => {
 });
 
 canvas.addEventListener('pointerdown', (e) => {
+  if (skins.open()) controls.autoRotate = false; // mientras se inspecciona la mesa no gira sola
   if (e.button !== 0) return;
   unlockAudio();
   if (!canAct()) return;
@@ -1047,7 +1048,7 @@ const zoomPoint = new THREE.Vector3();
 window.addEventListener(
   'wheel',
   (e) => {
-    if (e.target !== canvas || state === 'menu') return;
+    if (e.target !== canvas || (state === 'menu' && !skins.open())) return;
     e.preventDefault();
     e.stopPropagation(); // que no llegue al zoom a saltos de OrbitControls
     if (camTween) return;
@@ -1476,8 +1477,8 @@ function updateAimVisuals() {
     return;
   }
   (ghost.material as THREE.MeshBasicMaterial).color.set(0xffffff);
-  // En la pestaña de palos, el taco se deja sobre el paño para verlo
-  if (state === 'menu' && skins.showingCue()) {
+  // Con la hoja de skins abierta, el taco se deja sobre el paño para verlo
+  if (state === 'menu' && skins.open()) {
     cue.visible = true;
     cue.position.set(-0.72, 0.014, 0.4);
     cue.lookAt(0.75, 0.016, 0.34);
@@ -1954,7 +1955,15 @@ document.querySelectorAll<HTMLButtonElement>('#mode-sheet [data-assist]').forEac
 );
 
 // ---------- Skins ----------
-const skins = initSkins(scene, cue);
+const MENU_CAMERA = new THREE.Vector3(-2.6, 1.9, 1.8);
+const skins = initSkins(scene, cue, (open) => {
+  // Con la hoja de skins abierta la mesa se gira arrastrando y se acerca con la rueda, para verla de cerca
+  controls.mouseButtons.LEFT = open ? THREE.MOUSE.ROTATE : PLAY_BUTTONS.LEFT;
+  controls.touches.ONE = open ? THREE.TOUCH.ROTATE : (null as unknown as THREE.TOUCH);
+  controls.enableRotate = open || !touch;
+  controls.autoRotate = true;
+  if (!open) moveCamera(MENU_CAMERA.clone(), new THREE.Vector3(0, 0, 0), BASE_FOV, true);
+});
 
 /** Cuenta la victoria una vez por partida y devuelve el aviso de lo que desbloquea, si desbloquea algo. */
 let winsCounted = -1;

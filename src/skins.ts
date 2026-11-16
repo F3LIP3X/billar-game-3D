@@ -2,9 +2,9 @@
 // en localStorage y cualquiera, también las bloqueadas, se puede probar en la mesa real.
 import type * as THREE from 'three';
 import { sounds } from './audio';
-import { ballThumb, setBallStyle, setCueColors, type BallStyle } from './balls';
+import { ballThumb, setBallStyle, setCueColors, type BallStyle, type CueArt } from './balls';
 import { bindSheet } from './sheets';
-import { setFeltColor, setWoodSkin, woodArt, type WoodSkin } from './textures';
+import { setFeltColor, setWoodSkin, woodArt, type FeltArt, type WoodSkin } from './textures';
 
 const WINS_KEY = 'billar-wins';
 
@@ -31,13 +31,13 @@ interface Skin {
   wins: number; // victorias necesarias para desbloquearla
 }
 type TableSkin = Skin & WoodSkin;
-type CueSkin = Skin & { c1: string; c2: string };
-type FeltSkin = Skin & { color: string | null };
+type CueSkin = Skin & { c1: string; c2: string; art?: CueArt };
+type FeltSkin = Skin & { color: string | null; art?: FeltArt };
 type BallSkin = Skin & { id: BallStyle };
 
 // Para añadir o renombrar skins, edita estas listas. La primera de cada una es la de serie.
 // Mesas: `file` es una imagen de /public/textures; `dark` y `light` recolorean la veta del cerezo;
-// `art` pinta un dibujo (pixel, dots o stripes) con `colors`.
+// `art` pinta un dibujo (pixel, dots, stripes, carbon o galaxy) con `colors`.
 const TABLE_SKINS: TableSkin[] = [
   { id: 'cherry', name: 'Cerezo', wins: 0 },
   { id: 'nogal', name: 'Nogal', wins: 2, dark: '#24130a', light: '#7c5231' },
@@ -47,6 +47,8 @@ const TABLE_SKINS: TableSkin[] = [
   { id: 'candy', name: 'Caramelo', wins: 10, art: 'stripes', colors: ['#fff4f6', '#ff4f8b'] },
   { id: 'arcade', name: 'Arcade', wins: 13, art: 'pixel', colors: ['#0b0b1a', '#0b0b1a', '#15153a', '#ff2bd6', '#22e6ff'] },
   { id: 'cherry3', name: 'Cómic', wins: 15, art: 'dots', colors: ['#6b3fa3', '#ffe14d', '#1b1b1b'] },
+  { id: 'galaxia', name: 'Galaxia', wins: 18, art: 'galaxy', colors: ['#140c33', '#ffffff', '#b9a4ff', '#7fd6ff'] },
+  { id: 'carbono', name: 'Carbono', wins: 20, art: 'carbon' },
   { id: 'cherry4', name: 'Vaca', wins: 30, file: 'cherry4.webp' },
 ];
 // Bolas: mismos colores y números, otro trazo
@@ -56,30 +58,35 @@ const BALL_SKINS: BallSkin[] = [
   { id: 'pixel', name: 'Píxel', wins: 9 },
   { id: 'neon', name: 'Neón', wins: 16 },
 ];
-// Palos: c1 = madera clara (eje y antebrazo), c2 = madera oscura (picos, anillos y culata)
+// Palos: c1 = madera clara (eje y antebrazo), c2 = madera oscura (picos, anillos y culata).
+// Con `art` el palo lleva un dibujo en vez de veta y c1/c2 son sus colores.
 const CUE_SKINS: CueSkin[] = [
   { id: 'cerezo', name: 'Cerezo', c1: '#e4cc98', c2: '#17100c', wins: 0 },
   { id: 'nogal', name: 'Nogal', c1: '#c9a06c', c2: '#3a2212', wins: 1 },
   { id: 'ebano', name: 'Ébano', c1: '#5a5a64', c2: '#141418', wins: 3 },
-  { id: 'rubi', name: 'Rubí', c1: '#ead9b5', c2: '#7a1422', wins: 6 },
+  { id: 'pixel', name: 'Píxel', c1: '#57a84a', c2: '#6b4a2b', art: 'pixel', wins: 4 },
+  { id: 'toon', name: 'Cartoon', c1: '#ffcf33', c2: '#ff5a4d', art: 'toon', wins: 8 },
   { id: 'dorado', name: 'Dorado', c1: '#f6e3a1', c2: '#b8923f', wins: 10 },
-  { id: 'zafiro', name: 'Zafiro', c1: '#dfe3ea', c2: '#143a7a', wins: 14 },
-  { id: 'carbono', name: 'Carbono', c1: '#8fa3b8', c2: '#1b2733', wins: 20 },
+  { id: 'galaxia', name: 'Galaxia', c1: '#b9a4ff', c2: '#140c33', art: 'galaxy', wins: 14 },
+  { id: 'carbono', name: 'Carbono', c1: '#30343c', c2: '#d23a2b', art: 'carbon', wins: 20 },
 ];
-// Paños: color null = el azul original
+// Paños: color null = el azul original; `art` cambia la fibra lisa por un dibujo
 const FELT_SKINS: FeltSkin[] = [
   { id: 'azul', name: 'Azul', color: null, wins: 0 },
   { id: 'arena', name: 'Arena', color: '#a9844e', wins: 3 },
+  { id: 'pixel', name: 'Píxel', color: '#3f9a3a', art: 'pixel', wins: 4 },
   { id: 'verde', name: 'Verde', color: '#085c1d', wins: 5 },
   { id: 'burdeos', name: 'Burdeos', color: '#6b1220', wins: 8 },
   { id: 'blanco', name: 'Lila', color: '#cc80f0', wins: 12 },
+  { id: 'galaxia', name: 'Galaxia', color: '#3b2a8a', art: 'galaxy', wins: 14 },
   { id: 'turquesa', name: 'Turquesa', color: '#0a6a70', wins: 18 },
+  { id: 'carbono', name: 'Carbono', color: '#4a4e57', art: 'carbon', wins: 20 },
   { id: 'negro', name: 'Negro', color: '#2b2b2e', wins: 25 },
 ];
 
 const customSheet = document.querySelector<HTMLDivElement>('#custom')!;
 
-export function initSkins(scene: THREE.Object3D, cue: THREE.Group) {
+export function initSkins(scene: THREE.Object3D, cue: THREE.Group, onToggle: (open: boolean) => void) {
   const customNote = customSheet.querySelector<HTMLParagraphElement>('#custom-note')!;
   let customTab = 'tables';
 
@@ -151,7 +158,7 @@ export function initSkins(scene: THREE.Object3D, cue: THREE.Group) {
       el.style.setProperty('--c1', s.c1);
       el.style.setProperty('--c2', s.c2);
     },
-    (s) => setCueColors(cue, s.c1, s.c2),
+    (s) => setCueColors(cue, s.c1, s.c2, s.art),
   );
   const feltShelf: Shelf<FeltSkin> = makeShelf(
     'felt',
@@ -162,7 +169,7 @@ export function initSkins(scene: THREE.Object3D, cue: THREE.Group) {
       el.style.setProperty('--wood', woodCss(shown(tableShelf)));
       el.style.setProperty('--felt', feltCss(s));
     },
-    (s) => setFeltColor(scene, s.color),
+    (s) => setFeltColor(scene, s.color, s.art),
   );
   const shelves: Shelf[] = [tableShelf, ballShelf, cueShelf, feltShelf];
 
@@ -217,10 +224,12 @@ export function initSkins(scene: THREE.Object3D, cue: THREE.Group) {
   bindSheet('#custom', '#custom-btn', {
     open() {
       document.body.classList.add('customizing');
+      onToggle(true);
       renderCustom();
     },
     close() {
       document.body.classList.remove('customizing');
+      onToggle(false);
       // Lo que se estaba probando sin tenerlo se devuelve
       for (const sh of shelves) {
         if (!sh.trying) continue;
@@ -265,7 +274,7 @@ export function initSkins(scene: THREE.Object3D, cue: THREE.Group) {
       const fresh = shelves.flatMap((sh) => sh.skins).filter((s) => s.wins === wins);
       return fresh.length ? ` · ¡Desbloqueado: ${fresh.map((s) => s.name).join(', ')}!` : '';
     },
-    /** En la pestaña de palos el taco se enseña sobre la mesa. */
-    showingCue: () => !customSheet.hidden && customTab === 'cues',
+    /** Con la hoja abierta el taco se enseña sobre la mesa y la cámara se puede mover. */
+    open: () => !customSheet.hidden,
   };
 }

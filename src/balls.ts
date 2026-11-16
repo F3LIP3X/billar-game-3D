@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { BALL_R } from './constants';
 import { low } from './quality';
+import { paintBlocks, paintCarbon, paintStars } from './textures';
 
 export const BALL_COLORS: Record<number, string> = {
   1: '#e8a600', // ámbar profundo: así la lisa se distingue de la de rayas (más clara)
@@ -233,6 +234,53 @@ function ringsTexture(base: string, ring: string, bands: [number, number][], gra
   });
 }
 
+/** Palos con dibujo en vez de veta de madera: el dibujo cubre eje, antebrazo y culata. */
+export type CueArt = 'carbon' | 'pixel' | 'toon' | 'galaxy';
+
+/** Tesela del dibujo (8 celdas de lado) y cuántas veces da la vuelta al palo. */
+function cueArtTile(art: CueArt, c1: string, c2: string): [THREE.Texture, number] {
+  if (art === 'carbon') return [canvasTexture(64, 64, (g) => paintCarbon(g, 64, 64, 8, 8)), 2];
+  if (art === 'pixel') {
+    const tex = canvasTexture(64, 64, (g) => paintBlocks(g, 64, 64, 8, 8, [c1, c1, c2, '#1b1b1b']));
+    tex.magFilter = THREE.NearestFilter; // bloques nítidos de cerca
+    return [tex, 1];
+  }
+  if (art === 'galaxy') {
+    return [
+      canvasTexture(128, 128, (g) => {
+        g.fillStyle = c2;
+        g.fillRect(0, 0, 128, 128);
+        paintStars(g, 128, 128, 26, 1, ['#ffffff', c1]);
+      }),
+      1,
+    ];
+  }
+  // toon: bastón de caramelo, franjas en espiral separadas por línea negra
+  return [
+    canvasTexture(64, 64, (g) => {
+      g.fillStyle = c1;
+      g.fillRect(0, 0, 64, 64);
+      for (const x of [-64, 0, 64]) {
+        g.fillStyle = '#111111';
+        g.beginPath();
+        g.moveTo(x - 4, 0);
+        g.lineTo(x + 36, 0);
+        g.lineTo(x + 100, 64);
+        g.lineTo(x + 60, 64);
+        g.fill();
+        g.fillStyle = c2;
+        g.beginPath();
+        g.moveTo(x + 2, 0);
+        g.lineTo(x + 30, 0);
+        g.lineTo(x + 94, 64);
+        g.lineTo(x + 66, 64);
+        g.fill();
+      }
+    }),
+    2,
+  ];
+}
+
 // Colores originales del palo: madera clara (eje y antebrazo) y madera oscura (picos, anillos y culata)
 const CUE_C1 = '#e4cc98';
 const CUE_C2 = '#17100c';
@@ -243,11 +291,17 @@ const CUE_C2 = '#17100c';
  * el taco sigue hacia +z. Cada pieza es un perfil torneado (radio a lo largo de z) cerrado por los dos extremos.
  * c1 = madera clara (eje, antebrazo); c2 = madera oscura (picos, anillos, culata).
  */
-function fillCue(cue: THREE.Group, c1: string, c2: string) {
+function fillCue(cue: THREE.Group, c1: string, c2: string, art?: CueArt) {
   const wood = (map: THREE.Texture) =>
     low
       ? new THREE.MeshStandardMaterial({ map, roughness: 0.45 })
       : new THREE.MeshPhysicalMaterial({ map, roughness: 0.4, clearcoat: 0.8, clearcoatRoughness: 0.12 });
+  // El dibujo se repite a lo largo lo justo para que sus celdas salgan cuadradas en cada pieza
+  const drawn = (length: number, radius: number) => {
+    const [tex, around] = cueArtTile(art!, c1, c2);
+    tex.repeat.set(around, Math.max(1, Math.round((around * length) / (2 * Math.PI * radius))));
+    return tex;
+  };
   const linen = linenTexture();
   linen.repeat.set(3, 26);
   const pieces: { profile: [number, number][]; mat: THREE.Material }[] = [
@@ -259,7 +313,7 @@ function fillCue(cue: THREE.Group, c1: string, c2: string) {
     { profile: [[0.0062, 0.0026], [0.0063, 0.011]], mat: new THREE.MeshStandardMaterial({ color: 0x5a3a22, roughness: 0.8 }) },
     { profile: [[0.0064, 0.011], [0.0064, 0.033]], mat: low ? new THREE.MeshStandardMaterial({ color: 0xf1ead9, roughness: 0.35 }) : new THREE.MeshPhysicalMaterial({ color: 0xf1ead9, roughness: 0.3, clearcoat: 0.5 }) },
     // Eje: estrechamiento progresivo, casi recto en los primeros 30 cm
-    { profile: [[0.0064, 0.033], [0.0066, 0.33], [0.0083, 0.56], [0.0102, 0.733]], mat: wood(mapleTexture(c1)) },
+    { profile: [[0.0064, 0.033], [0.0066, 0.33], [0.0083, 0.56], [0.0102, 0.733]], mat: wood(art ? drawn(0.7, 0.0075) : mapleTexture(c1)) },
     // Unión de acero
     {
       profile: [[0.0105, 0.733], [0.0106, 0.745]],
@@ -267,7 +321,7 @@ function fillCue(cue: THREE.Group, c1: string, c2: string) {
     },
     { profile: [[0.0106, 0.745], [0.0107, 0.762]], mat: wood(ringsTexture('#f1ead9', c2, [[0.25, 0.35], [0.65, 0.75]])) },
     // Antebrazo con picos
-    { profile: [[0.0107, 0.762], [0.0119, 1.06]], mat: wood(forearmTexture(c1, c2)) },
+    { profile: [[0.0107, 0.762], [0.0119, 1.06]], mat: wood(art ? drawn(0.3, 0.0113) : forearmTexture(c1, c2)) },
     { profile: [[0.0119, 1.06], [0.012, 1.068]], mat: wood(ringsTexture(c2, '#f1ead9', [[0.3, 0.7]])) },
     // Empuñadura de lino
     {
@@ -276,7 +330,7 @@ function fillCue(cue: THREE.Group, c1: string, c2: string) {
     },
     { profile: [[0.0121, 1.32], [0.0122, 1.328]], mat: wood(ringsTexture(c2, '#f1ead9', [[0.3, 0.7]])) },
     // Culata con anillos de marfil
-    { profile: [[0.0122, 1.328], [0.0129, 1.455]], mat: wood(ringsTexture(c2, '#efe6d2', [[0.12, 0.14], [0.17, 0.19], [0.9, 0.93]], true)) },
+    { profile: [[0.0122, 1.328], [0.0129, 1.455]], mat: wood(art ? drawn(0.127, 0.0125) : ringsTexture(c2, '#efe6d2', [[0.12, 0.14], [0.17, 0.19], [0.9, 0.93]], true)) },
     { profile: [[0.0129, 1.455], [0.0127, 1.464], [0.0105, 1.472], [0, 1.474]], mat: new THREE.MeshStandardMaterial({ color: 0x0d0d0e, roughness: 0.7 }) },
   ];
   for (const { profile, mat } of pieces) {
@@ -303,7 +357,7 @@ export function createCue(c1 = CUE_C1, c2 = CUE_C2): THREE.Group {
 }
 
 /** Cambia los colores del palo: se rehacen sus piezas dentro del mismo grupo y se liberan las antiguas. */
-export function setCueColors(cue: THREE.Group, c1: string, c2: string) {
+export function setCueColors(cue: THREE.Group, c1: string, c2: string, art?: CueArt) {
   for (const child of [...cue.children]) {
     cue.remove(child);
     const m = child as THREE.Mesh;
@@ -312,7 +366,7 @@ export function setCueColors(cue: THREE.Group, c1: string, c2: string) {
     mat.map?.dispose();
     mat.dispose();
   }
-  fillCue(cue, c1, c2);
+  fillCue(cue, c1, c2, art);
 }
 
 /**
