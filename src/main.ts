@@ -1906,7 +1906,8 @@ window.addEventListener('keydown', (e) => {
 function enterGame() {
   unlockAudio();
   startScreen.classList.add('leaving');
-  setTimeout(() => (startScreen.hidden = true), 600);
+  (document.activeElement as HTMLElement | null)?.blur(); // el foco no se queda en un botón del menú
+  setTimeout(() => state !== 'menu' && (startScreen.hidden = true), 600); // por si ya se ha vuelto al menú
   hud.hidden = false;
   document.body.classList.add('playing');
   controls.autoRotate = false;
@@ -2174,10 +2175,13 @@ const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 /** Turno de la máquina: piensa, coloca la blanca si hace falta, apunta a la vista del jugador y tira. */
 const aiWorker = new Worker(new URL('./ai.worker.ts', import.meta.url), { type: 'module' });
+let planId = 0;
 const planShot = (input: AiInput) =>
   new Promise<AiShot>((resolve) => {
-    aiWorker.onmessage = (e: MessageEvent<AiShot>) => resolve(e.data);
-    aiWorker.postMessage(input);
+    const id = ++planId;
+    // Una respuesta atrasada (de una partida que ya se dejó) no vale para esta petición
+    aiWorker.onmessage = (e: MessageEvent<{ id: number; shot: AiShot }>) => e.data.id === id && resolve(e.data.shot);
+    aiWorker.postMessage({ id, input });
   });
 
 async function runAI(gen: number) {
@@ -2195,9 +2199,8 @@ async function runAI(gen: number) {
     kitchenOnly,
     level: aiLevel,
   }).finally(() => {
-    console.info(`Shaders compilados en ${Math.round(performance.now() - compileStart)} ms`);
-    if (skinById(skinId).file !== 'cherry.webp') applyTableSkin(skinById(skinId).file); // mesa guardada
-    frameDelta(); // que el primer fotograma no cuente la espera
+    aiThinking = false;
+    loadedAt = performance.now(); // los FPS de mientras pensaba no cuentan
   });
   if (stale()) return;
 
@@ -2496,6 +2499,7 @@ async function leaveOnline() {
 }
 
 async function openRoom(kind: 'create' | 'join') {
+  if (createBtn.disabled) return; // ya hay una conexión en marcha (Enter mantenido)
   const name = nameInput.value.trim() || 'Jugador';
   try {
     localStorage.setItem('billar-name', name);

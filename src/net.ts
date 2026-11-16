@@ -4,7 +4,7 @@
 // tiro, y el jugador que ha tirado publica al acabar el estado oficial (posiciones, turno,
 // grupos...) al que todos se ajustan. La base de datos solo transporta mensajes; las reglas
 // (database.rules.json) limitan quién puede escribir qué.
-import { initializeApp } from 'firebase/app';
+import { getApps, initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously } from 'firebase/auth';
 import {
   get,
@@ -113,10 +113,13 @@ function randomCode() {
 let dbPromise: Promise<{ db: Database; uid: string }> | null = null;
 function connect() {
   dbPromise ??= (async () => {
-    const app = initializeApp(firebaseConfig);
+    const app = getApps()[0] ?? initializeApp(firebaseConfig);
     const cred = await signInAnonymously(getAuth(app));
     return { db: getDatabase(app), uid: cred.user.uid };
-  })();
+  })().catch((e) => {
+    dbPromise = null; // un fallo de red no se queda guardado: el siguiente intento vuelve a conectar
+    throw e;
+  });
   return dbPromise;
 }
 
