@@ -262,8 +262,24 @@ export function buildRoom(scene: THREE.Scene) {
   );
   floor.rotation.x = -Math.PI / 2;
   floor.position.y = -1.02;
-  floor.receiveShadow = true;
   scene.add(floor);
+
+  // Sombra de la mesa: una mancha difusa. La sombra real de los focos dibujaba en el suelo un
+  // rectángulo negro de borde duro que se veía al alejar la cámara.
+  const c = document.createElement('canvas');
+  c.width = 256;
+  c.height = 128;
+  const g = c.getContext('2d')!;
+  g.shadowColor = '#000';
+  g.shadowBlur = 28;
+  g.fillRect(64, 36, 128, 56);
+  const shadow = new THREE.Mesh(
+    new THREE.PlaneGeometry(6.4, 3.6),
+    new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, opacity: 0.85, depthWrite: false }),
+  );
+  shadow.rotation.x = -Math.PI / 2;
+  shadow.position.y = -1.01;
+  scene.add(shadow);
 
   // Lámpara colgante
   const lamps = new THREE.Group();

@@ -955,6 +955,8 @@ function stopControlsInertia() {
 
 function moveCamera(toPos: THREE.Vector3, toTarget: THREE.Vector3, toFov: number, animate: boolean) {
   zoomGoal = null;
+  // Se puede alejar hasta vez y media el encuadre de la vista: más lejos la mesa se pierde en la sala
+  controls.maxDistance = Math.max(6, toPos.distanceTo(toTarget) * 1.5);
   stopControlsInertia();
   if (!animate) {
     camera.position.copy(toPos);
