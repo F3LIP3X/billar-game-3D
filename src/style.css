@@ -1187,3 +1187,171 @@ body.online #chat-clouds {
     font-size: 10px;
   }
 }
+
+/* ---------- Personalizar ---------- */
+.sheet.sheet-wide {
+  width: min(880px, 94vw);
+  max-height: 88vh;
+  overflow-y: auto;
+}
+.custom-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.custom-top .muted { margin: 0; }
+.custom-wins {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  font: 600 12px/1 'Inter', system-ui, sans-serif;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.custom-wins b { font: 600 16px/1 'Fraunces', Georgia, serif; color: #e2b65e; }
+
+.custom-tabs {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: 16px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+}
+.custom-tab {
+  padding: 8px 20px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: 600 13px/1 'Inter', system-ui, sans-serif;
+  cursor: pointer;
+  opacity: 0.7;
+  transition: background 0.2s, opacity 0.2s;
+}
+.custom-tab:hover { opacity: 1; }
+.custom-tab.on { background: rgba(226, 182, 94, 0.2); color: #e2b65e; opacity: 1; }
+
+.custom-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 14px;
+}
+.custom-grid[hidden] { display: none; }
+
+.item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: transform 0.2s, border-color 0.2s;
+}
+.item:hover { transform: translateY(-2px); }
+.item.equipped { border-color: rgba(226, 182, 94, 0.6); }
+.item h3 { margin: 6px 0 0; font: 600 16px/1.1 'Fraunces', Georgia, serif; }
+.item .req { margin: 0; font-size: 12px; opacity: 0.65; }
+
+.item .badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  font: 600 11px/1 'Inter', system-ui, sans-serif;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.item.equipped .badge { background: rgba(226, 182, 94, 0.22); color: #e2b65e; }
+
+/* Vista previa */
+.item .preview {
+  position: relative;
+  height: 110px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: radial-gradient(circle at 50% 30%, rgba(255, 255, 255, 0.08), rgba(0, 0, 0, 0.35));
+  overflow: hidden;
+}
+.table-prev i {
+  width: 78%;
+  height: 62%;
+  border-radius: 10px;
+  background: var(--felt);
+  border: 7px solid var(--wood);
+  box-shadow: inset 0 0 14px rgba(0, 0, 0, 0.45), 0 8px 16px rgba(0, 0, 0, 0.4);
+}
+.table-prev::before,
+.table-prev::after {
+  content: '';
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #0a0a0a;
+  top: 24px;
+  left: calc(11% + 2px);
+  box-shadow: 0 54px 0 #0a0a0a;
+  z-index: 1;
+}
+.table-prev::after { left: auto; right: calc(11% + 2px); }
+.cue-prev i {
+  width: 88%;
+  height: 8px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #f3f1ea 0 5%, var(--c1) 5% 12%, var(--c2) 12% 88%, #1a1a1a 88%);
+  transform: rotate(-14deg);
+  box-shadow: 0 6px 10px rgba(0, 0, 0, 0.45);
+}
+
+/* Bloqueado */
+.item.locked .preview > i { filter: grayscale(0.85) brightness(0.55); }
+.item.locked .preview::before,
+.item.locked .preview::after { filter: grayscale(1); }
+.item.locked .preview {
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-opacity='.85' stroke-width='1.8' stroke-linejoin='round'%3E%3Cpath d='M7 11V8a5 5 0 0 1 10 0v3M6 11h12v9H6z'/%3E%3C/svg%3E")
+      center / 34px no-repeat,
+    radial-gradient(circle at 50% 30%, rgba(255, 255, 255, 0.05), rgba(0, 0, 0, 0.5));
+}
+.item.locked .preview > i { opacity: 0.35; }
+.item.locked h3 { opacity: 0.75; }
+.item.locked .badge { color: rgba(255, 255, 255, 0.7); }
+
+/* Mesas con la textura real de madera */
+button.item {
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+button.item:disabled { cursor: not-allowed; }
+button.item:disabled:hover { transform: none; }
+
+.table-prev.wood-prev i {
+  border: 7px solid transparent; /* el marco de madera se pinta con la textura */
+  background:
+    linear-gradient(#1d3f7a, #1d3f7a) padding-box,
+    var(--img) center / cover border-box;
+}
+
+@media (max-width: 600px) {
+  .custom-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .item { padding: 9px; }
+  .item .preview { height: 84px; }
+  .item h3 { font-size: 14px; }
+}

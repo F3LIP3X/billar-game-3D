@@ -9,12 +9,15 @@ import { BALL_R, FOOT_SPOT, HEAD_SPOT, MAX_SHOT_SPEED, POCKETS, TABLE_L, TABLE_W
 import { castCueRay, FIXED_DT, isMoving, step, type Body } from './physics';
 import type { AimMsg, ChatMsg, Net, NetEvents, ShotMsg, StateMsg } from './net';
 import { buildRoom, buildTable } from './table';
-import { ballColor, createBallMesh, createBlobShadow, createCue } from './balls';
 import { evaluateShot, groupOf, type Group, type Player, type ShotRecord } from './rules';
 import { isMuted, setMuted, sounds, unlockAudio } from './audio';
 import { CircleSlash, createElement, type IconNode } from 'lucide';
 import type { AiInput, AiShot, Level } from './ai';
 import { low, noGpu, quality, rememberLowQuality, touch } from './quality';
+
+import { setCherrySkin, setFeltColor } from './textures';
+import { ballColor, createBallMesh, createBlobShadow, createCue, setCueColors } from './balls';
+
 
 // Línea de cabecera: en el saque (y tras blanca dentro en el saque) la blanca va detrás de ella
 const KITCHEN_X = HEAD_SPOT.x;
@@ -320,6 +323,7 @@ function goToMenu() {
 
 function showVictory(winner: number, shooterWon: boolean, foul: boolean) {
   const machineWon = vsAI && winner === 1;
+  registerWin(winner);
   document.querySelector('.victory .eyebrow')!.textContent = machineWon ? 'Gana la IA' : vsAI ? '¡Le has ganado a la IA!' : 'Victoria';
   const loser = 1 - winner;
   const group = players[winner].group;
@@ -1934,6 +1938,221 @@ modeSheet.querySelectorAll<HTMLButtonElement>('[data-assist]').forEach((btn) =>
   }),
 );
 
+// ---------- Personalizar ----------
+const WINS_KEY = 'billar-wins';
+const SKIN_KEY = 'billar-table-skin';
+// Para añadir o renombrar mesas, edita esta lista (las imágenes están en /public/textures)
+const TABLE_SKINS = [
+  { id: 'cherry', file: 'cherry.webp', name: 'Normal', wins: 0 },
+  { id: 'cherry2', file: 'cherry2.webp', name: 'Negra', wins: 7 },
+  { id: 'cherry3', file: 'cherry3.webp', name: 'Morado', wins: 15 },
+  { id: 'cherry4', file: 'cherry4.webp', name: 'Vaca', wins: 30 },
+];
+
+function readStore(key: string) {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+function writeStore(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    /* sin almacenamiento: en esta sesión se mantiene, pero no se recuerda */
+  }
+}
+
+let wins = Math.max(0, parseInt(readStore(WINS_KEY) ?? '0', 10) || 0);
+let skinId = readStore(SKIN_KEY) ?? TABLE_SKINS[0].id;
+const skinById = (id: string) => TABLE_SKINS.find((s) => s.id === id) ?? TABLE_SKINS[0];
+// Si la mesa guardada ya no existe o sigue bloqueada, se vuelve a la primera
+if (skinById(skinId).wins > wins) skinId = TABLE_SKINS[0].id;
+
+const applyTableSkin = (file: string) => setCherrySkin(file);
+const texUrl = (file: string) => `${import.meta.env.BASE_URL}textures/${file}`;
+
+const customSheet = document.querySelector<HTMLDivElement>('#custom')!;
+const tablesGrid = customSheet.querySelector<HTMLElement>('#tab-tables')!;
+
+// ---------- Palos ----------
+const CUE_SKIN_KEY = 'billar-cue-skin';
+// Para añadir o renombrar palos, edita esta lista (c1 = madera clara, c2 = madera oscura)
+const CUE_SKINS = [
+  { id: 'cerezo', name: 'Cerezo', c1: '#e4cc98', c2: '#17100c', wins: 0 },
+  { id: 'ebano', name: 'Ébano', c1: '#5a5a64', c2: '#141418', wins: 3 },
+  { id: 'dorado', name: 'Dorado', c1: '#f6e3a1', c2: '#b8923f', wins: 10 },
+  { id: 'carbono', name: 'Carbono', c1: '#8fa3b8', c2: '#1b2733', wins: 20 },
+];
+
+let cueSkinId = readStore(CUE_SKIN_KEY) ?? CUE_SKINS[0].id;
+const cueSkinById = (id: string) => CUE_SKINS.find((s) => s.id === id) ?? CUE_SKINS[0];
+// Si el palo guardado ya no existe o sigue bloqueado, se vuelve al primero
+if (cueSkinById(cueSkinId).wins > wins) cueSkinId = CUE_SKINS[0].id;
+
+const applyCueSkin = (id: string) => {
+  const s = cueSkinById(id);
+  setCueColors(cue, s.c1, s.c2);
+};
+if (cueSkinId !== CUE_SKINS[0].id) applyCueSkin(cueSkinId); // palo guardado
+
+const cuesGrid = customSheet.querySelector<HTMLElement>('#tab-cues')!;
+
+function renderCues() {
+  cuesGrid.replaceChildren();
+  for (const s of CUE_SKINS) {
+    const locked = wins < s.wins;
+    const equipped = s.id === cueSkinId;
+    const el = document.createElement('button');
+    el.type = 'button';
+    el.className = 'item' + (locked ? ' locked' : '') + (equipped ? ' equipped' : '');
+    el.disabled = locked;
+    el.style.setProperty('--c1', s.c1);
+    el.style.setProperty('--c2', s.c2);
+    const req = locked
+      ? `Gana ${s.wins} partidas (${wins}/${s.wins})`
+      : s.wins === 0
+        ? 'El de siempre'
+        : `Desbloqueado (${s.wins} victorias)`;
+    const badge = locked ? `${lockIcon}Bloqueado` : equipped ? 'Equipado' : 'Equipar';
+    el.innerHTML = `<div class="preview cue-prev"><i></i></div><h3>${s.name}</h3><p class="req">${req}</p><span class="badge">${badge}</span>`;
+    el.addEventListener('click', () => {
+      if (locked) return;
+      sounds.ui();
+      cueSkinId = s.id;
+      writeStore(CUE_SKIN_KEY, cueSkinId);
+      applyCueSkin(s.id);
+      renderCues();
+    });
+    cuesGrid.append(el);
+  }
+}
+// ---------- Paño ----------
+const FELT_SKIN_KEY = 'billar-felt-skin';
+// Para añadir o renombrar paños, edita esta lista (color: null = el original)
+const FELT_SKINS: { id: string; name: string; color: string | null; wins: number }[] = [
+  { id: 'azul', name: 'Azul', color: null, wins: 0 },
+  { id: 'verde', name: 'Verde', color: '#085c1d', wins: 5 },
+  { id: 'blanco', name: 'Rosa', color: '#cc80f0', wins: 12 },
+  { id: 'negro', name: 'Negro', color: '#2b2b2e', wins: 25 },
+];
+
+let feltSkinId = readStore(FELT_SKIN_KEY) ?? FELT_SKINS[0].id;
+const feltSkinById = (id: string) => FELT_SKINS.find((s) => s.id === id) ?? FELT_SKINS[0];
+// Si el paño guardado ya no existe o sigue bloqueado, se vuelve al primero
+if (feltSkinById(feltSkinId).wins > wins) feltSkinId = FELT_SKINS[0].id;
+
+const applyFeltSkin = (id: string) => setFeltColor(scene, feltSkinById(id).color);
+if (feltSkinId !== FELT_SKINS[0].id) applyFeltSkin(feltSkinId); // paño guardado
+
+const feltGrid = customSheet.querySelector<HTMLElement>('#tab-felt')!;
+
+function renderFelt() {
+  feltGrid.replaceChildren();
+  for (const s of FELT_SKINS) {
+    const locked = wins < s.wins;
+    const equipped = s.id === feltSkinId;
+    const el = document.createElement('button');
+    el.type = 'button';
+    el.className = 'item' + (locked ? ' locked' : '') + (equipped ? ' equipped' : '');
+    el.disabled = locked;
+    el.style.setProperty('--felt', s.color ?? '#1d3f7a');
+    el.style.setProperty('--wood', '#6b3a22');
+    const req = locked
+      ? `Gana ${s.wins} partidas (${wins}/${s.wins})`
+      : s.wins === 0
+        ? 'El de siempre'
+        : `Desbloqueado (${s.wins} victorias)`;
+    const badge = locked ? `${lockIcon}Bloqueado` : equipped ? 'Equipado' : 'Equipar';
+    el.innerHTML = `<div class="preview table-prev"><i></i></div><h3>${s.name}</h3><p class="req">${req}</p><span class="badge">${badge}</span>`;
+    el.addEventListener('click', () => {
+      if (locked) return;
+      sounds.ui();
+      feltSkinId = s.id;
+      writeStore(FELT_SKIN_KEY, feltSkinId);
+      applyFeltSkin(s.id);
+      renderFelt();
+    });
+    feltGrid.append(el);
+  }
+}
+
+const lockIcon =
+  '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M7 11V8a5 5 0 0 1 10 0v3M6 11h12v9H6z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>';
+
+function renderCustom() {
+  customSheet.querySelector('.custom-wins b')!.textContent = String(wins);
+  tablesGrid.replaceChildren();
+  for (const s of TABLE_SKINS) {
+    const locked = wins < s.wins;
+    const equipped = s.id === skinId;
+    const el = document.createElement('button');
+    el.type = 'button';
+    el.className = 'item' + (locked ? ' locked' : '') + (equipped ? ' equipped' : '');
+    el.disabled = locked;
+    el.style.setProperty('--img', `url(${texUrl(s.file)})`);
+    const req = locked
+    ? `Gana ${s.wins} partidas (${wins}/${s.wins})`
+    : s.wins === 0
+      ? 'La de siempre'
+      : `Desbloqueada (${s.wins} victorias)`;
+    const badge = locked ? `${lockIcon}Bloqueado` : equipped ? 'Equipado' : 'Equipar';
+    el.innerHTML = `<div class="preview table-prev wood-prev"><i></i></div><h3>${s.name}</h3><p class="req">${req}</p><span class="badge">${badge}</span>`;
+    el.addEventListener('click', () => {
+      if (locked) return;
+      sounds.ui();
+      skinId = s.id;
+      writeStore(SKIN_KEY, skinId);
+      applyTableSkin(s.file);
+      renderCustom();
+    });
+        tablesGrid.append(el);
+  }
+  renderCues();
+  renderFelt();
+}
+renderCustom();
+
+/** Suma una victoria (una vez por partida) y avisa si desbloquea mesas. */
+let winsCounted = -1;
+function registerWin(winner: number) {
+  if (winsCounted === gameStart) return;
+  winsCounted = gameStart;
+  if ((net && winner !== mySeat) || (vsAI && winner !== 0)) return; // solo cuentan tus victorias
+  const before = wins;
+  wins++;
+  writeStore(WINS_KEY, String(wins));
+      const fresh = [...TABLE_SKINS, ...CUE_SKINS, ...FELT_SKINS].filter((s) => s.wins > before && s.wins <= wins);
+  if (fresh.length) {
+    const reason = document.querySelector('#win-reason')!;
+    reason.textContent += ` · ¡Desbloqueado: ${fresh.map((s) => s.name).join(', ')}!`;
+  }
+  renderCustom();
+}
+
+const setCustom = (open: boolean) => (customSheet.hidden = !open);
+document.querySelector('#custom-btn')!.addEventListener('click', () => {
+  unlockAudio();
+  sounds.ui();
+  renderCustom();
+  setCustom(true);
+});
+document.querySelector('#custom-close')!.addEventListener('click', () => setCustom(false));
+customSheet.addEventListener('click', (e) => e.target === customSheet && setCustom(false));
+window.addEventListener('keydown', (e) => e.key === 'Escape' && !customSheet.hidden && setCustom(false));
+customSheet.querySelectorAll<HTMLButtonElement>('.custom-tab').forEach((tab) =>
+  tab.addEventListener('click', () => {
+    sounds.ui();
+    customSheet.querySelectorAll<HTMLButtonElement>('.custom-tab').forEach((t) => {
+      const on = t === tab;
+      t.classList.toggle('on', on);
+      t.setAttribute('aria-selected', String(on));
+    });
+    customSheet.querySelectorAll<HTMLElement>('.custom-grid').forEach((g) => (g.hidden = g.id !== `tab-${tab.dataset.tab}`));
+  }),
+);
+
 // ---------- Contra la máquina ----------
 const aiSheet = document.querySelector<HTMLDivElement>('#ai-sheet')!;
 const setAiSheet = (open: boolean) => (aiSheet.hidden = !open);
@@ -1976,8 +2195,9 @@ async function runAI(gen: number) {
     kitchenOnly,
     level: aiLevel,
   }).finally(() => {
-    aiThinking = false;
-    loadedAt = performance.now(); // los FPS de mientras pensaba no cuentan
+    console.info(`Shaders compilados en ${Math.round(performance.now() - compileStart)} ms`);
+    if (skinById(skinId).file !== 'cherry.webp') applyTableSkin(skinById(skinId).file); // mesa guardada
+    frameDelta(); // que el primer fotograma no cuente la espera
   });
   if (stale()) return;
 
