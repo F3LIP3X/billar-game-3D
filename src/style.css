@@ -28,7 +28,12 @@
   -webkit-font-smoothing: antialiased;
 }
 
-* { box-sizing: border-box; }
+* {
+  box-sizing: border-box;
+  /* Barras de desplazamiento finas y del color del vidrio, no las blancas del sistema */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
+}
 
 /* El atributo hidden manda siempre: sin esto, cualquier regla con display lo anula */
 [hidden] { display: none !important; }
@@ -1195,9 +1200,13 @@ body.online #chat-clouds {
   pointer-events: none; /* la mesa de al lado se puede seguir girando */
 }
 #custom .sheet {
+  display: flex;
+  flex-direction: column;
   width: min(460px, 100%);
+  overflow: hidden; /* cabecera y pestañas fijas: solo se desplazan las tarjetas */
   pointer-events: auto;
 }
+#custom .sheet > * { flex: none; }
 .customizing .start-panel { visibility: hidden; }
 
 .custom-top {
@@ -1256,10 +1265,16 @@ body.online #chat-clouds {
   line-height: 1.4;
 }
 
-.custom-grid {
+#custom .custom-grid {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   display: grid;
   grid-template-columns: repeat(2, 1fr);
+  align-content: start;
   gap: 10px;
+  margin-right: -12px; /* la barra queda en el margen de la hoja, no encima de las tarjetas */
+  padding: 2px 12px 2px 0;
 }
 
 .item {
@@ -1336,6 +1351,20 @@ body.online #chat-clouds {
     var(--wood) border-box;
   box-shadow: 0 8px 14px rgba(0, 0, 0, 0.45);
 }
+/* Bolas: una lisa, la 8 y una rayada, con el brillo de la esfera por encima */
+.ball-prev i, .ball-prev i::before, .ball-prev i::after {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 34% 28%, rgba(255, 255, 255, 0.5), transparent 38%, rgba(0, 0, 0, 0.4)),
+    var(--b1) center / cover;
+  box-shadow: 0 6px 8px rgba(0, 0, 0, 0.45);
+}
+.ball-prev i { position: relative; }
+.ball-prev i::before, .ball-prev i::after { content: ''; position: absolute; top: 0; left: -48px; }
+.ball-prev i::before { background-image: radial-gradient(circle at 34% 28%, rgba(255, 255, 255, 0.5), transparent 38%, rgba(0, 0, 0, 0.4)), var(--b0); }
+.ball-prev i::after { left: 48px; background-image: radial-gradient(circle at 34% 28%, rgba(255, 255, 255, 0.5), transparent 38%, rgba(0, 0, 0, 0.4)), var(--b2); }
 .cue-prev { filter: drop-shadow(0 6px 5px rgba(0, 0, 0, 0.5)); }
 .cue-prev i {
   width: 90%;

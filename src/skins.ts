@@ -1,10 +1,10 @@
-// Tienda de skins (mesas, palos y paños): se desbloquean con victorias, la elegida se guarda
+// Tienda de skins (mesas, bolas, palos y paños): se desbloquean con victorias, la elegida se guarda
 // en localStorage y cualquiera, también las bloqueadas, se puede probar en la mesa real.
 import type * as THREE from 'three';
 import { sounds } from './audio';
-import { setCueColors } from './balls';
+import { ballThumb, setBallStyle, setCueColors, type BallStyle } from './balls';
 import { bindSheet } from './sheets';
-import { setFeltColor, setWoodSkin, type WoodSkin } from './textures';
+import { setFeltColor, setWoodSkin, woodArt, type WoodSkin } from './textures';
 
 const WINS_KEY = 'billar-wins';
 
@@ -33,17 +33,28 @@ interface Skin {
 type TableSkin = Skin & WoodSkin;
 type CueSkin = Skin & { c1: string; c2: string };
 type FeltSkin = Skin & { color: string | null };
+type BallSkin = Skin & { id: BallStyle };
 
 // Para añadir o renombrar skins, edita estas listas. La primera de cada una es la de serie.
-// Mesas: `file` es una imagen de /public/textures; `dark` y `light` recolorean la veta del cerezo.
+// Mesas: `file` es una imagen de /public/textures; `dark` y `light` recolorean la veta del cerezo;
+// `art` pinta un dibujo (pixel, dots o stripes) con `colors`.
 const TABLE_SKINS: TableSkin[] = [
   { id: 'cherry', name: 'Cerezo', wins: 0 },
   { id: 'nogal', name: 'Nogal', wins: 2, dark: '#24130a', light: '#7c5231' },
-  { id: 'arce', name: 'Arce', wins: 5, dark: '#a67a42', light: '#ecd3a2' },
+  { id: 'pixel', name: 'Píxel', wins: 4, art: 'pixel', colors: ['#3f8f3a', '#57a84a', '#2f6e2c', '#6b4a2b', '#7d5a36'] },
+  { id: 'toon', name: 'Cartoon', wins: 6, art: 'dots', colors: ['#ffcf33', '#ff5a4d', '#1b1b1b'] },
   { id: 'cherry2', name: 'Ébano', wins: 7, dark: '#09090b', light: '#3d3d46' },
-  { id: 'cherry3', name: 'Amatista', wins: 15, dark: '#1d0b33', light: '#6b3fa3' },
-  { id: 'lacada', name: 'Lacada', wins: 22, dark: '#b7b2a8', light: '#f5f2ea' },
+  { id: 'candy', name: 'Caramelo', wins: 10, art: 'stripes', colors: ['#fff4f6', '#ff4f8b'] },
+  { id: 'arcade', name: 'Arcade', wins: 13, art: 'pixel', colors: ['#0b0b1a', '#0b0b1a', '#15153a', '#ff2bd6', '#22e6ff'] },
+  { id: 'cherry3', name: 'Cómic', wins: 15, art: 'dots', colors: ['#6b3fa3', '#ffe14d', '#1b1b1b'] },
   { id: 'cherry4', name: 'Vaca', wins: 30, file: 'cherry4.webp' },
+];
+// Bolas: mismos colores y números, otro trazo
+const BALL_SKINS: BallSkin[] = [
+  { id: 'classic', name: 'Clásicas', wins: 0 },
+  { id: 'toon', name: 'Cartoon', wins: 3 },
+  { id: 'pixel', name: 'Píxel', wins: 9 },
+  { id: 'neon', name: 'Neón', wins: 16 },
 ];
 // Palos: c1 = madera clara (eje y antebrazo), c2 = madera oscura (picos, anillos y culata)
 const CUE_SKINS: CueSkin[] = [
@@ -100,8 +111,12 @@ export function initSkins(scene: THREE.Object3D, cue: THREE.Group) {
   }
 
   const texUrl = (file: string) => `${import.meta.env.BASE_URL}textures/${file}`;
+  const thumbs = new Map<string, string>(); // las miniaturas dibujadas se guardan: se piden en cada repintado
+  const cached = (key: string, make: () => string) => thumbs.get(key) ?? thumbs.set(key, make()).get(key)!;
   const woodCss = (t: TableSkin) =>
-    t.dark && t.light
+    t.art
+      ? `url(${cached(t.id, () => woodArt(t)!.toDataURL())}) 0 0 / 96px 48px`
+      : t.dark && t.light
       ? `repeating-linear-gradient(94deg, ${t.dark}, ${t.light} 9px, ${t.dark} 19px)`
       : `url(${texUrl(t.file ?? 'cherry.webp')}) center / cover`;
   const feltCss = (f: FeltSkin) => f.color ?? '#1d3f7a';
@@ -118,6 +133,14 @@ export function initSkins(scene: THREE.Object3D, cue: THREE.Group) {
       el.style.setProperty('--felt', feltCss(shown(feltShelf)));
     },
     setWoodSkin,
+  );
+  const ballShelf: Shelf<BallSkin> = makeShelf(
+    'balls',
+    'billar-ball-skin',
+    BALL_SKINS,
+    'ball-prev',
+    (el, s) => [1, 8, 11].forEach((n, i) => el.style.setProperty(`--b${i}`, `url(${cached(`ball${n}${s.id}`, () => ballThumb(n, s.id))})`)),
+    (s) => setBallStyle(s.id, scene),
   );
   const cueShelf: Shelf<CueSkin> = makeShelf(
     'cues',
@@ -141,7 +164,7 @@ export function initSkins(scene: THREE.Object3D, cue: THREE.Group) {
     },
     (s) => setFeltColor(scene, s.color),
   );
-  const shelves: Shelf[] = [tableShelf, cueShelf, feltShelf];
+  const shelves: Shelf[] = [tableShelf, ballShelf, cueShelf, feltShelf];
 
   const lockIcon =
     '<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M7 11V8a5 5 0 0 1 10 0v3M6 11h12v9H6z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>';

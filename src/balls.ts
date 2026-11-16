@@ -15,7 +15,15 @@ export const BALL_COLORS: Record<number, string> = {
 
 export const ballColor = (n: number) => (n === 0 ? '#f6f1e4' : BALL_COLORS[n > 8 ? n - 8 : n]);
 
-function makeTexture(n: number): THREE.CanvasTexture {
+export type BallStyle = 'classic' | 'toon' | 'pixel' | 'neon';
+let ballStyle: BallStyle = 'classic';
+
+/**
+ * Dibuja la bola `n` desplegada (1024x512, el número en el ecuador). Todos los estilos conservan
+ * el color de cada bola y la diferencia entre lisas y rayadas; cambia el trazo:
+ * toon = contornos negros gruesos, pixel = bloques grandes, neon = fondo negro con el color encendido.
+ */
+function drawBall(n: number, style: BallStyle): HTMLCanvasElement {
   const c = document.createElement('canvas');
   // En calidad baja la mitad de resolución: son 16 texturas y las bolas ocupan poco en pantalla
   const k = low ? 0.5 : 1;
@@ -23,16 +31,20 @@ function makeTexture(n: number): THREE.CanvasTexture {
   c.height = 512 * k;
   const g = c.getContext('2d')!;
   g.scale(k, k); // el resto se dibuja con las medidas de 1024x512
-  const ivory = '#fbf8ef';
+  const toon = style === 'toon';
+  const neon = style === 'neon';
+  const ivory = neon ? '#0b0b12' : '#fbf8ef';
+  const ink = neon ? '#f4f4ff' : '#151515';
+  const big = style === 'pixel' ? 1.45 : toon ? 1.15 : 1; // número más grande donde el trazo es tosco
 
   if (n === 0) {
-    g.fillStyle = ivory;
+    g.fillStyle = neon ? '#eef0ff' : '#fbf8ef'; // la blanca sigue siendo blanca
     g.fillRect(0, 0, 1024, 512);
     // punto rojo de referencia para ver el giro
     for (const u of [0.25, 0.75]) {
       g.fillStyle = '#c0392b';
       g.beginPath();
-      g.arc(u * 1024, 256, 14, 0, Math.PI * 2);
+      g.arc(u * 1024, 256, 14 * big, 0, Math.PI * 2);
       g.fill();
     }
   } else {
@@ -43,34 +55,87 @@ function makeTexture(n: number): THREE.CanvasTexture {
     if (stripe) {
       g.fillStyle = color;
       g.fillRect(0, 512 * 0.27, 1024, 512 * 0.46);
+      if (toon) {
+        g.fillStyle = '#111';
+        for (const y of [0.27, 0.73]) g.fillRect(0, 512 * y - 8, 1024, 16);
+      }
     }
     for (const u of [0.25, 0.75]) {
       const cx = u * 1024;
       const cy = 256;
       g.fillStyle = ivory;
       g.beginPath();
-      g.ellipse(cx, cy, 64, 70, 0, 0, Math.PI * 2);
+      g.ellipse(cx, cy, 64 * big, 70 * big, 0, 0, Math.PI * 2);
       g.fill();
-      g.fillStyle = '#151515';
-      g.font = `700 ${n > 9 ? 72 : 84}px Inter, system-ui, sans-serif`;
+      if (toon || neon) {
+        g.lineWidth = toon ? 14 : 10;
+        g.strokeStyle = toon ? '#111' : n === 8 ? ink : color;
+        g.stroke();
+      }
+      g.fillStyle = ink;
+      g.font = `${toon ? 900 : 700} ${(n > 9 ? 72 : 84) * big}px Inter, system-ui, sans-serif`;
       g.textAlign = 'center';
       g.textBaseline = 'middle';
       g.fillText(String(n), cx, cy + 4);
     }
   }
-  const tex = new THREE.CanvasTexture(c);
+  if (style === 'pixel') {
+    // Se reduce a 128x64 y se amplía sin suavizar: quedan los bloques
+    const small = document.createElement('canvas');
+    small.width = 128;
+    small.height = 64;
+    small.getContext('2d')!.drawImage(c, 0, 0, 128, 64);
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.imageSmoothingEnabled = false;
+    g.drawImage(small, 0, 0, c.width, c.height);
+  }
+  return c;
+}
+
+/** Miniatura cuadrada de la bola `n` en un estilo (el trozo de la textura con el número), como data URL. */
+export function ballThumb(n: number, style: BallStyle) {
+  const src = drawBall(n, style);
+  const c = document.createElement('canvas');
+  c.width = c.height = 96;
+  const side = src.height / 2;
+  c.getContext('2d')!.drawImage(src, src.width / 4 - side / 2, side / 2, side, side, 0, 0, 96, 96);
+  return c.toDataURL();
+}
+
+type BallMaterial = THREE.MeshStandardMaterial | THREE.MeshPhysicalMaterial;
+
+/** Textura y acabado de una bola en el estilo actual: mate en toon y pixel, con luz propia en neon. */
+function dressBall(mat: BallMaterial, n: number) {
+  mat.map?.dispose();
+  const tex = new THREE.CanvasTexture(drawBall(n, ballStyle));
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 8;
-  return tex;
+  mat.map = tex;
+  const flat = ballStyle === 'toon' || ballStyle === 'pixel';
+  const neon = ballStyle === 'neon';
+  mat.roughness = flat ? 0.6 : low ? 0.3 : 0.12;
+  if (mat instanceof THREE.MeshPhysicalMaterial) mat.clearcoat = flat ? 0 : 1;
+  mat.emissiveMap = neon ? tex : null;
+  mat.emissive.set(neon ? 0xffffff : 0x000000);
+  mat.emissiveIntensity = 0.45;
+  mat.needsUpdate = true;
+}
+
+/** Cambia el estilo de las bolas: las que ya están en la escena se repintan y las nuevas salen así. */
+export function setBallStyle(style: BallStyle, scene: THREE.Object3D) {
+  ballStyle = style;
+  for (const o of scene.children) {
+    if (typeof o.userData.ball === 'number') dressBall((o as THREE.Mesh).material as BallMaterial, o.userData.ball);
+  }
 }
 
 const geometry = low ? new THREE.SphereGeometry(BALL_R, 24, 16) : new THREE.SphereGeometry(BALL_R, 48, 32);
 
 export function createBallMesh(n: number): THREE.Mesh {
-  const mat = low
-    ? new THREE.MeshStandardMaterial({ map: makeTexture(n), roughness: 0.3 })
-    : new THREE.MeshPhysicalMaterial({ map: makeTexture(n), roughness: 0.12, clearcoat: 1, clearcoatRoughness: 0.05 });
+  const mat = low ? new THREE.MeshStandardMaterial() : new THREE.MeshPhysicalMaterial({ clearcoatRoughness: 0.05 });
+  dressBall(mat, n);
   const mesh = new THREE.Mesh(geometry, mat);
+  mesh.userData.ball = n; // para repintarla al cambiar de estilo
   mesh.castShadow = true;
   // Con el círculo del número hacia arriba (en la textura está en el ecuador): desde arriba se ve el
   // número con la franja atravesándolo, y así las rayas se distinguen de las lisas. El giro
