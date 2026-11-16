@@ -547,13 +547,39 @@ function turnTimeout() {
   publishState(-1, false, false, msg);
 }
 
+/** Dónde descansa una tarjeta de jugador, aunque ahora esté apartada (el desplazamiento falsea getBoundingClientRect). */
+function restRect(card: HTMLElement) {
+  // En escritorio va centrada en vertical con translateY(-50%); en pantalla estrecha, sin desplazar
+  const top = card.offsetTop - (window.innerWidth > 600 ? card.offsetHeight / 2 : 0);
+  return { left: card.offsetLeft, right: card.offsetLeft + card.offsetWidth, top, bottom: top + card.offsetHeight };
+}
+
+/** Las tarjetas de jugador se apartan hacia su borde mientras el zoom deja la mesa debajo de ellas. */
+const playerCards = [...document.querySelectorAll<HTMLElement>('.player')];
+function tuckCards() {
+  if (state === 'menu' || window.innerWidth <= 600) return;
+  for (const card of playerCards) {
+    const r = restRect(card);
+    const x = card.dataset.player === '0' ? r.right : r.left; // el borde que mira a la mesa
+    // Algo más de margen para volver que para apartarse: así no tiembla en el límite
+    const margin = card.classList.contains('tucked') ? 0.34 : 0.2;
+    const over = [r.top, (r.top + r.bottom) / 2, r.bottom].some((y) => {
+      pointer.set((x / innerWidth) * 2 - 1, 1 - (y / innerHeight) * 2);
+      raycaster.setFromCamera(pointer, camera);
+      const p = raycaster.ray.intersectPlane(tablePlane, new THREE.Vector3());
+      return !!p && Math.abs(p.x) < TABLE_L / 2 + margin && Math.abs(p.z) < TABLE_W / 2 + margin;
+    });
+    card.classList.toggle('tucked', over);
+  }
+}
+
 /** Coloca el reloj bajo la tarjeta del jugador que tira (sin salirse de la pantalla). */
 function placeTimer() {
   const card = document.querySelector<HTMLElement>(`.player[data-player="${current}"]`);
   if (!card || card.getClientRects().length === 0) return;
-  const r = card.getBoundingClientRect();
+  const r = restRect(card);
   const half = turnTimerEl.offsetWidth / 2;
-  const x = Math.min(innerWidth - half - 8, Math.max(half + 8, r.left + r.width / 2));
+  const x = Math.min(innerWidth - half - 8, Math.max(half + 8, (r.left + r.right) / 2));
   turnTimerEl.style.left = `${x}px`;
   turnTimerEl.style.top = `${r.bottom + 8}px`;
 }
@@ -881,7 +907,7 @@ function fitPosition(dir: THREE.Vector3, fov: number) {
       const f = freeRect();
       maxY = 1 - (2 * f.top) / h;
       minY = -1 + (2 * (h - f.bottom)) / h;
-    } else maxX = 1 - (2 * (panel.getBoundingClientRect().right + 16)) / w;
+    } else maxX = 1 - (2 * (restRect(panel).right + 16)) / w;
   }
   const cam = camera.clone();
   cam.fov = fov;
@@ -1685,6 +1711,7 @@ function frame() {
   updateZoom(dt);
   followCueBall(dt);
   controls.update();
+  tuckCards();
   // Que el desplazamiento no saque la mesa de la vista
   controls.target.x = THREE.MathUtils.clamp(controls.target.x, -1.6, 1.6);
   controls.target.z = THREE.MathUtils.clamp(controls.target.z, -1, 1);
