@@ -57,7 +57,7 @@ Botón **Contra la máquina** del menú, con tres niveles (fácil, normal, exper
 
 ## Multijugador online
 
-Botón **Jugar online** del menú: se crea una sala con un código de 5 letras (y un enlace `?sala=CÓDIGO`) y el rival se une desde su navegador. Las salas se guardan en Firebase Realtime Database; la sesión es anónima, no hace falta cuenta.
+Botón **Online** del menú: se crea una sala con un código de 5 letras (y un enlace `?sala=CÓDIGO`) y el rival se une desde su navegador. Las salas se guardan en Firebase Realtime Database; la sesión es anónima, no hace falta cuenta.
 
 - Cada jugador calcula la misma física (`src/physics.ts`, paso fijo `FIXED_DT`, determinista); quien tira envía solo ángulo, fuerza y efecto, y al acabar publica el estado oficial (posiciones, turno, grupos) al que se ajusta el otro.
 - `src/net.ts`: salas, presencia y mensajes. `database.rules.json`: quién puede escribir qué.

@@ -15,6 +15,7 @@ import { CircleSlash, createElement, type IconNode } from 'lucide';
 import type { AiInput, AiShot, Level } from './ai';
 import { low, noGpu, quality, rememberLowQuality, touch } from './quality';
 
+import { bindSheet } from './sheets';
 import { setCherrySkin, setFeltColor } from './textures';
 import { ballColor, createBallMesh, createBlobShadow, createCue, setCueColors } from './balls';
 
@@ -293,19 +294,28 @@ restartBtn.addEventListener('click', () => {
 });
 document.querySelector('#to-menu')!.addEventListener('click', () => goToMenu());
 
-// Salir de la partida al menú: hay que pulsar dos veces para no perderla sin querer
-let exitArmedAt = 0;
-document.querySelectorAll<HTMLButtonElement>('.exit-btn').forEach((btn) =>
+/** Salir pide dos pulsaciones en 3 s para no perder la partida sin querer; mientras tanto el botón lo avisa. */
+function confirmTwice(btn: HTMLButtonElement, action: () => void) {
+  const label = btn.querySelector('svg') ? null : btn.textContent; // los de icono avisan con un mensaje
+  let timer = 0;
+  const disarm = () => {
+    clearTimeout(timer);
+    btn.classList.remove('armed');
+    if (label) btn.textContent = label;
+  };
   btn.addEventListener('click', () => {
-    if (performance.now() - exitArmedAt > 3000) {
-      exitArmedAt = performance.now();
-      showMessage('Pulsa otra vez para salir al menú');
+    if (btn.classList.contains('armed')) {
+      disarm();
+      action();
       return;
     }
-    exitArmedAt = 0;
-    goToMenu();
-  }),
-);
+    btn.classList.add('armed');
+    if (label) btn.textContent = '¿Seguro?';
+    else showMessage('Pulsa otra vez para salir al menú');
+    timer = window.setTimeout(disarm, 3000);
+  });
+}
+document.querySelectorAll<HTMLButtonElement>('.exit-btn, #net-leave').forEach((btn) => confirmTwice(btn, goToMenu));
 
 function goToMenu() {
   if (net) void leaveOnline();
@@ -346,6 +356,7 @@ function showVictory(winner: number, shooterWon: boolean, foul: boolean) {
   const secs = Math.round((performance.now() - gameStart) / 1000);
   document.querySelector('#duration')!.textContent = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
   overlay.hidden = false;
+  restartBtn.focus();
   // De fondo, la cámara gira despacio alrededor de la mesa
   controls.autoRotate = true;
   controls.autoRotateSpeed = 0.8;
@@ -1879,28 +1890,7 @@ window.addEventListener('resize', resize);
 
 const startScreen = document.querySelector<HTMLDivElement>('#start')!;
 const hud = document.querySelector<HTMLDivElement>('#hud')!;
-// Hoja "Cómo se juega": se cierra con la X, con Esc o tocando fuera; el foco vuelve al botón
-const howSheet = document.querySelector<HTMLDivElement>('#how')!;
-const howBtn = document.querySelector<HTMLButtonElement>('#how-btn')!;
-const howClose = document.querySelector<HTMLButtonElement>('#how-close')!;
-function setHow(open: boolean) {
-  if (open === !howSheet.hidden) return;
-  howSheet.hidden = !open;
-  if (open) howClose.focus();
-  else howBtn.focus();
-}
-howBtn.addEventListener('click', () => {
-  unlockAudio();
-  sounds.ui();
-  setHow(true);
-});
-howClose.addEventListener('click', () => setHow(false));
-howSheet.addEventListener('click', (e) => {
-  if (e.target === howSheet) setHow(false);
-});
-window.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') setHow(false);
-});
+bindSheet('#how', '#how-btn');
 
 /** Pasa del menú a la partida (la misma transición para el modo local y el online). */
 function enterGame() {
@@ -1919,17 +1909,8 @@ function enterGame() {
 }
 
 // Jugar → menú de dificultad (con o sin guía de tiro)
-const modeSheet = document.querySelector<HTMLDivElement>('#mode-sheet')!;
-const setModeSheet = (open: boolean) => (modeSheet.hidden = !open);
-document.querySelector('#play')!.addEventListener('click', () => {
-  unlockAudio();
-  sounds.ui();
-  setModeSheet(true);
-});
-document.querySelector('#mode-close')!.addEventListener('click', () => setModeSheet(false));
-modeSheet.addEventListener('click', (e) => e.target === modeSheet && setModeSheet(false));
-window.addEventListener('keydown', (e) => e.key === 'Escape' && !modeSheet.hidden && setModeSheet(false));
-modeSheet.querySelectorAll<HTMLButtonElement>('[data-assist]').forEach((btn) =>
+const setModeSheet = bindSheet('#mode-sheet', '#play');
+document.querySelectorAll<HTMLButtonElement>('#mode-sheet [data-assist]').forEach((btn) =>
   btn.addEventListener('click', () => {
     assist = btn.dataset.assist === 'on';
     localBreaker = 0;
@@ -2155,13 +2136,8 @@ customSheet.querySelectorAll<HTMLButtonElement>('.custom-tab').forEach((tab) =>
 );
 
 // ---------- Contra la máquina ----------
-const aiSheet = document.querySelector<HTMLDivElement>('#ai-sheet')!;
-const setAiSheet = (open: boolean) => (aiSheet.hidden = !open);
-document.querySelector('#ai-btn')!.addEventListener('click', () => setAiSheet(true));
-document.querySelector('#ai-close')!.addEventListener('click', () => setAiSheet(false));
-aiSheet.addEventListener('click', (e) => e.target === aiSheet && setAiSheet(false));
-window.addEventListener('keydown', (e) => e.key === 'Escape' && !aiSheet.hidden && setAiSheet(false));
-aiSheet.querySelectorAll<HTMLButtonElement>('[data-level]').forEach((btn) =>
+const setAiSheet = bindSheet('#ai-sheet', '#ai-btn');
+document.querySelectorAll<HTMLButtonElement>('#ai-sheet [data-level]').forEach((btn) =>
   btn.addEventListener('click', () => {
     aiLevel = btn.dataset.level as Level;
     localBreaker = 0; // empieza sacando la persona; en las revanchas se alterna
@@ -2260,7 +2236,6 @@ const joinBtn = document.querySelector<HTMLButtonElement>('#join-room')!;
 const acceptBtn = document.querySelector<HTMLButtonElement>('#accept-invite')!;
 const netStatus = document.querySelector<HTMLDivElement>('#net-status')!;
 const netText = document.querySelector<HTMLSpanElement>('#net-text')!;
-const netLeave = document.querySelector<HTMLButtonElement>('#net-leave')!;
 let presence: [boolean, boolean] = [false, false];
 let rematchFlags: [boolean, boolean] = [false, false];
 
@@ -2566,20 +2541,6 @@ copyBtn.addEventListener('click', async () => {
     copyBtn.textContent = url; // sin portapapeles (p. ej. HTTP): se muestra para copiarlo a mano
   }
   setTimeout(() => (copyBtn.textContent = 'Copiar enlace'), 2500);
-});
-
-// Salir de la sala en mitad de la partida: hay que pulsar dos veces
-let leaveArmedAt = 0;
-netLeave.addEventListener('click', () => {
-  if (performance.now() - leaveArmedAt > 3000) {
-    leaveArmedAt = performance.now();
-    netLeave.textContent = '¿Seguro?';
-    setTimeout(() => (netLeave.textContent = 'Salir'), 3000);
-    return;
-  }
-  leaveArmedAt = 0;
-  netLeave.textContent = 'Salir';
-  goToMenu();
 });
 
 // Enlace de invitación: ?sala=ABCDE abre la hoja solo con la opción de unirse a esa sala

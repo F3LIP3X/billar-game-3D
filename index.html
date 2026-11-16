@@ -38,13 +38,15 @@
       <section class="start-panel glass" aria-labelledby="game-title">
         <div class="emblem" aria-hidden="true"><span>8</span></div>
         <h1 id="game-title" class="title">Billar <span>3D</span></h1>
-        <p class="lede">Bola 8 contra la IA, un amigo o por internet. Mete tu grupo y cierra con la negra.</p>
+        <p class="lede">Bola 8: mete tu grupo y cierra con la negra.</p>
         <div class="start-actions">
-          <button id="play" class="btn btn-primary">Jugar</button>
-          <button id="ai-btn" class="btn btn-secondary" aria-haspopup="dialog">Contra la IA</button>
-          <button id="online-btn" class="btn btn-secondary" aria-haspopup="dialog">Jugar online</button>
+          <button id="play" class="btn btn-primary level" aria-haspopup="dialog"><b>Dos jugadores</b><span>Por turnos, en este dispositivo</span></button>
+          <button id="ai-btn" class="btn btn-secondary level" aria-haspopup="dialog"><b>Contra la IA</b><span>Tres niveles de dificultad</span></button>
+          <button id="online-btn" class="btn btn-secondary level" aria-haspopup="dialog"><b>Online</b><span>Con un amigo, por código o enlace</span></button>
+        </div>
+        <div class="start-extra">
           <button id="how-btn" class="btn btn-secondary" aria-haspopup="dialog">Cómo se juega</button>
-          <button id="custom-btn" class="btn btn-secondary" aria-haspopup="dialog">Personalizar</button>
+          <button id="custom-btn" class="btn btn-secondary" aria-haspopup="dialog">Skins <span id="start-skins" aria-label="desbloqueadas"></span></button>
         </div>
         <p id="gpu-warning" class="gpu-warning" role="status" hidden>
           Tu navegador no está usando la aceleración por GPU, así que la calidad gráfica bajará para que el juego vaya fluido.
@@ -66,12 +68,12 @@
     <div id="mode-sheet" class="sheet-backdrop" hidden>
       <div class="sheet glass" role="dialog" aria-modal="true" aria-labelledby="mode-title">
         <header class="sheet-head">
-          <h2 id="mode-title">Elige la dificultad</h2>
+          <h2 id="mode-title">Dos jugadores</h2>
           <button id="mode-close" class="icon-btn" aria-label="Cerrar">
             <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
           </button>
         </header>
-        <p class="muted">Partida para dos jugadores en el mismo dispositivo.</p>
+        <p class="muted">Os turnáis en este dispositivo. Elegid si queréis guía de tiro.</p>
         <div class="level-list">
           <button class="btn btn-secondary level" data-assist="on"><b>Fácil</b><span>Con guía: dirección de tiro y trayectoria de la bola</span></button>
           <button class="btn btn-secondary level" data-assist="off"><b>Difícil</b><span>Sin ayudas: apuntas a ojo</span></button>
@@ -99,7 +101,7 @@
     <div id="online" class="sheet-backdrop" hidden>
       <div class="sheet glass" role="dialog" aria-modal="true" aria-labelledby="online-title">
         <header class="sheet-head">
-          <h2 id="online-title">Jugar online</h2>
+          <h2 id="online-title">Online</h2>
           <button id="online-close" class="icon-btn" aria-label="Cerrar">
             <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
           </button>

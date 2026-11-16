@@ -50,7 +50,7 @@ html, body {
 }
 
 button { font: inherit; color: inherit; }
-button:focus-visible, a:focus-visible {
+button:focus-visible, a:focus-visible, input:focus-visible {
   outline: 2px solid var(--ink);
   outline-offset: 3px;
 }
@@ -171,7 +171,12 @@ button:focus-visible, a:focus-visible {
 }
 .gpu-warning[hidden] { display: none; }
 .start-actions { display: flex; flex-direction: column; gap: 10px; }
-.start-actions .btn { width: 100%; min-height: 50px; font-size: 17px; }
+.start-actions .btn { width: 100%; }
+/* Ayuda y skins: acciones de apoyo, más discretas que los tres modos de juego */
+.start-extra { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+.start-extra .btn { padding: 0 12px; font-size: 15px; background: var(--fill); }
+.start-extra .btn:hover { background: var(--fill-strong); }
+#start-skins { font-size: 12px; font-weight: 400; color: var(--ink-2); font-variant-numeric: tabular-nums; }
 
 /* Hoja "Cómo se juega" */
 .sheet-backdrop {
@@ -456,6 +461,9 @@ body.free-cam #scene:active { cursor: grabbing; }
 /* Ancho fijo: si cambiara con el texto, la barra (centrada) se movería y arrastraría consigo el selector */
 #spin-label { width: 132px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
 
+/* Ventana estrecha con ratón: sin el texto del efecto, la barra cabe */
+@media (max-width: 720px) { #spin-label { display: none; } }
+
 #mute .off-icon, #mute.off .on-icon { display: none; }
 #mute.off .off-icon { display: block; }
 #mute.off { color: var(--ink-2); }
@@ -468,7 +476,7 @@ body.free-cam #scene:active { cursor: grabbing; }
   border-radius: 999px;
   background: var(--fill);
 }
-.views button {
+.views button, .exit-btn.text-btn { /* Salir: mismo aspecto que las vistas, al final de la barra */
   min-height: 36px;
   padding: 0 14px;
   border: none;
@@ -482,26 +490,13 @@ body.free-cam #scene:active { cursor: grabbing; }
   transition: background 0.15s, color 0.15s;
 }
 .views button:hover { color: var(--ink); }
-/* Salir al menú: mismo aspecto que las vistas, al final de la barra */
-.exit-btn.text-btn {
-  min-height: 36px;
-  padding: 0 14px;
-  border: none;
-  border-radius: 999px;
-  background: none;
-  color: var(--ink-2);
-  font-size: 14px;
-  font-weight: 600;
-  white-space: nowrap;
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s;
-}
 .exit-btn.text-btn:hover { color: var(--ink); background: var(--fill); }
+.exit-btn.armed, #net-leave.armed { color: var(--brass); }
 /* En móvil, debajo del botón de sonido */
 @media (pointer: coarse) {
   #hud > .exit-btn {
     position: absolute;
-    top: 60px;
+    top: 108px; /* debajo de sonido (12) y pantalla completa (60) */
     right: 12px;
     display: grid;
     place-items: center;
@@ -728,7 +723,7 @@ body.free-cam #scene:active { cursor: grabbing; }
 #fullscreen-btn.on .fs-exit { display: block; }
 /* En móvil el borde inferior lo ocupan los controles de tiro: el botón va arriba a la derecha, bajo el de sonido */
 @media (pointer: coarse) {
-  #fullscreen-btn { top: 12px; bottom: auto; width: 40px; height: 40px; }
+  #fullscreen-btn { top: 12px; right: 12px; bottom: auto; width: 40px; height: 40px; }
   body.playing #fullscreen-btn { top: 60px; }
 }
 
@@ -986,7 +981,8 @@ body.online #message { top: 64px; }
 .level-list { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
 .level { width: 100%; min-height: 56px; flex-direction: column; gap: 2px; align-items: flex-start; text-align: left; padding: 10px 18px; }
 .level b { font-size: 17px; font-weight: 600; }
-.level span { font-size: 13px; font-weight: 400; opacity: 0.7; }
+.level span { font-size: 13px; font-weight: 400; color: var(--ink-2); }
+.btn-primary.level span { color: inherit; opacity: 0.8; }
 #spin:disabled { opacity: 0.45; }
 
 /* ---------- Avisos de jugada ---------- */
@@ -1047,7 +1043,7 @@ body.online #chat-btn {
 body.online #chat-btn:hover { background: var(--fill-strong); }
 #chat-badge {
   position: absolute; top: -4px; right: -4px; min-width: 18px; height: 18px; padding: 0 5px;
-  border-radius: 9px; background: #e2b65e; color: #151515; font-size: 11px; font-weight: 700; line-height: 18px; text-align: center;
+  border-radius: 9px; background: var(--brass); color: #151515; font-size: 11px; font-weight: 700; line-height: 18px; text-align: center;
 }
 #chat-badge[hidden] { display: none; }
 body.online #chat:not([hidden]) {
@@ -1059,7 +1055,7 @@ body.online #chat:not([hidden]) {
 #chat-log { display: flex; flex-direction: column; gap: 6px; height: 190px; overflow-y: auto; overscroll-behavior: contain; padding-right: 2px; }
 .chat-empty { margin: auto; font-size: 13px; color: var(--ink-2); }
 .chat-msg { max-width: 85%; padding: 7px 11px; border-radius: 14px; font-size: 14px; line-height: 1.3; overflow-wrap: anywhere; background: var(--fill-strong); align-self: flex-start; }
-.chat-msg.me { align-self: flex-end; background: var(--pc, #e2b65e); color: #151515; }
+.chat-msg.me { align-self: flex-end; background: var(--pc, var(--brass)); color: #151515; }
 .chat-msg small { display: block; font-size: 11px; font-weight: 600; opacity: 0.7; margin-bottom: 1px; }
 .chat-quick { display: flex; flex-wrap: wrap; gap: 6px; }
 .chat-quick button { border: 1px solid var(--hairline); background: transparent; color: var(--ink); font: inherit; font-size: 12px; padding: 4px 10px; border-radius: 999px; cursor: pointer; }
@@ -1111,7 +1107,7 @@ body.online #chat-clouds {
   opacity: 0;
   transform: translate(-50%, -8px);
   transition: opacity 0.3s ease, transform 0.3s ease;
-  --pc: #e2b65e;
+  --pc: var(--brass);
   --tc: var(--pc);
 }
 #turn-timer.on {
@@ -1149,7 +1145,7 @@ body.online #chat-clouds {
   inset: 0;
   display: grid;
   place-items: center;
-  font: 600 15px/1 'Fraunces', Georgia, serif;
+  font: 600 15px/1 var(--font-display);
   font-variant-numeric: tabular-nums;
   color: var(--tc);
   transition: color 0.3s ease;
@@ -1158,7 +1154,7 @@ body.online #chat-clouds {
   max-width: 130px;
   overflow: hidden;
   text-overflow: ellipsis;
-  font: 600 12px/1 'Inter', system-ui, sans-serif;
+  font: 600 12px/1 var(--font-ui);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   opacity: 0.8;
