@@ -1214,6 +1214,7 @@ body.online #chat-clouds {
 }
 #custom .sheet > * { flex: none; }
 .customizing .start-panel { visibility: hidden; }
+.customizing #start { pointer-events: none; } /* la capa de inicio tapaba el canvas: sin esto no giraba ni hacía zoom */
 
 .custom-top {
   display: flex;
