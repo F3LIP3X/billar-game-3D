@@ -383,8 +383,6 @@ button:focus-visible, a:focus-visible, input:focus-visible {
 }
 #free-cam-badge strong { color: var(--ink); }
 body.free-cam #free-cam-badge { opacity: 1; transform: translate(-50%, 0); }
-body.free-cam #scene { cursor: grab; }
-body.free-cam #scene:active { cursor: grabbing; }
 
 /* ---------- Barra inferior ---------- */
 .bottom {

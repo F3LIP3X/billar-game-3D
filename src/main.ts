@@ -97,7 +97,6 @@ const PLAY_BUTTONS = {
   RIGHT: THREE.MOUSE.ROTATE,
 };
 // Con Ctrl pulsado: cámara libre, el clic izquierdo gira y el derecho desplaza
-const FREE_BUTTONS = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.PAN };
 controls.mouseButtons = { ...PLAY_BUTTONS };
 controls.touches = {
   ONE: null as unknown as THREE.TOUCH,
@@ -671,12 +670,12 @@ function aimOrPlace(e: PointerEvent, relative: boolean) {
   }
 }
 
-// ---------- Cámara libre (Ctrl) ----------
+// ---------- Puntería fija (Ctrl) ----------
+// Con Ctrl el taco deja de seguir al ratón: se puede mover la cámara sin perder el tiro, y el clic sigue tirando
 let freeCam = false;
 function setFreeCam(on: boolean) {
   if (on === freeCam || state === 'menu' || state === 'over') return;
   freeCam = on;
-  controls.mouseButtons = on ? { ...FREE_BUTTONS } : { ...PLAY_BUTTONS };
   document.body.classList.toggle('free-cam', on);
   if (on && state === 'charging') {
     state = 'aiming'; // si estaba cargando el tiro, se cancela
@@ -698,7 +697,7 @@ canvas.addEventListener('pointermove', (e) => {
 });
 
 canvas.addEventListener('pointerdown', (e) => {
-  if (e.button !== 0 || freeCam) return;
+  if (e.button !== 0) return;
   unlockAudio();
   if (!canAct()) return;
   if (e.pointerType === 'touch') {

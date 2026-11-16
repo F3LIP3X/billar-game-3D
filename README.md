@@ -21,7 +21,7 @@ npm run dev
 - **W A S D** (o el selector de la bola blanca): punto de golpeo — arriba sigue, abajo retrocede, lados dan efecto; **C** lo centra. Vuelve al centro tras cada tiro
 - **F**: pantalla completa. La vista elegida (3D, 2D, tras la bola) se recuerda en el navegador
 - **Clic derecho**: girar la cámara · **Botón central**: desplazar · **Rueda**: zoom suave hacia el cursor
-- **Ctrl** (mantener): cámara libre — arrastrar gira, clic derecho desplaza, rueda zoom; no interactúa con el juego
+- **Ctrl** (mantener): puntería fija — el taco no sigue al ratón mientras mueves la cámara (clic derecho gira, rueda zoom) y el clic izquierdo sigue tirando
 - **1 / 2 / V** o botones: vistas 3D, 2D (desde arriba) y tras la bola
 
 **Móvil**
