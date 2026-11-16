@@ -1184,170 +1184,171 @@ body.online #chat-clouds {
   }
 }
 
-/* ---------- Personalizar ---------- */
-.sheet.sheet-wide {
-  width: min(880px, 94vw);
-  max-height: 88vh;
-  overflow-y: auto;
+/* ---------- Personalizar ----------
+ * La hoja se acopla donde estaba el panel de inicio y no oscurece la escena:
+ * cada skin que se toca se ve en la mesa real, que sigue girando al lado.
+ */
+#custom {
+  place-items: center start;
+  padding: 16px max(16px, 6vw);
+  background: none;
+  pointer-events: none; /* la mesa de al lado se puede seguir girando */
 }
+#custom .sheet {
+  width: min(460px, 100%);
+  pointer-events: auto;
+}
+.customizing .start-panel { visibility: hidden; }
+
 .custom-top {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
-  flex-wrap: wrap;
   margin-bottom: 14px;
 }
-.custom-top .muted { margin: 0; }
+.custom-top .muted { margin: 0; font-size: 14px; line-height: 1.4; color: var(--ink-2); }
 .custom-wins {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 14px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  font: 600 12px/1 'Inter', system-ui, sans-serif;
+  flex: none;
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  padding: 8px 14px;
+  border-radius: 14px;
+  background: var(--fill);
+  border: 1px solid var(--hairline);
+  font-size: 11px;
+  font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+  color: var(--ink-2);
 }
-.custom-wins b { font: 600 16px/1 'Fraunces', Georgia, serif; color: #e2b65e; }
+.custom-wins b { font: 600 22px/1 var(--font-display); color: var(--brass); }
 
 .custom-tabs {
-  display: inline-flex;
+  display: flex;
   gap: 4px;
   padding: 4px;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--fill);
 }
 .custom-tab {
-  padding: 8px 20px;
+  flex: 1;
+  min-height: 36px;
   border: 0;
   border-radius: 999px;
   background: transparent;
-  color: inherit;
-  font: 600 13px/1 'Inter', system-ui, sans-serif;
+  color: var(--ink-2);
+  font-size: 14px;
+  font-weight: 600;
   cursor: pointer;
-  opacity: 0.7;
-  transition: background 0.2s, opacity 0.2s;
+  transition: background 0.2s, color 0.2s;
 }
-.custom-tab:hover { opacity: 1; }
-.custom-tab.on { background: rgba(226, 182, 94, 0.2); color: #e2b65e; opacity: 1; }
+.custom-tab:hover { color: var(--ink); }
+.custom-tab.on { background: var(--fill-strong); color: var(--ink); }
+
+.custom-note {
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1px dashed rgba(217, 174, 95, 0.5);
+  font-size: 13px;
+  line-height: 1.4;
+}
 
 .custom-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
 }
-.custom-grid[hidden] { display: none; }
 
 .item {
-  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 12px;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 10px;
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  transition: transform 0.2s, border-color 0.2s;
+  background: var(--fill);
+  border: 1px solid var(--hairline);
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.2s, border-color 0.2s, background 0.2s;
 }
-.item:hover { transform: translateY(-2px); }
-.item.equipped { border-color: rgba(226, 182, 94, 0.6); }
-.item h3 { margin: 6px 0 0; font: 600 16px/1.1 'Fraunces', Georgia, serif; }
-.item .req { margin: 0; font-size: 12px; opacity: 0.65; }
+.item:hover { transform: translateY(-2px); background: rgba(255, 255, 255, 0.11); }
+.item.equipped { border-color: var(--brass); box-shadow: inset 0 0 0 1px var(--brass); }
+.item.trying { border-style: dashed; border-color: var(--brass); }
+.item h3 { margin: 6px 0 0; font: 600 16px/1.1 var(--font-display); letter-spacing: 0; text-transform: none; color: var(--ink); }
+.item .req { margin: 0; font-size: 12px; color: var(--ink-2); }
+
+/* Cuánto falta para desbloquearla */
+.item .progress {
+  align-self: stretch;
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--brass) calc(var(--p) * 100%), var(--fill-strong) 0);
+}
 
 .item .badge {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  align-self: flex-start;
   margin-top: 4px;
-  padding: 4px 10px;
+  padding: 5px 10px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
-  font: 600 11px/1 'Inter', system-ui, sans-serif;
+  background: var(--fill-strong);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
   letter-spacing: 0.05em;
   text-transform: uppercase;
 }
-.item.equipped .badge { background: rgba(226, 182, 94, 0.22); color: #e2b65e; }
+.item.equipped .badge { background: var(--brass); color: var(--on-brass); }
+.item.trying .badge { color: var(--brass); }
 
-/* Vista previa */
+/* Miniatura: la mesa vista desde arriba (madera, paño y troneras) o el taco */
 .item .preview {
-  position: relative;
-  height: 110px;
+  align-self: stretch;
+  height: 92px;
   display: grid;
   place-items: center;
-  border-radius: 12px;
-  background: radial-gradient(circle at 50% 30%, rgba(255, 255, 255, 0.08), rgba(0, 0, 0, 0.35));
-  overflow: hidden;
-}
-.table-prev i {
-  width: 78%;
-  height: 62%;
   border-radius: 10px;
-  background: var(--felt);
-  border: 7px solid var(--wood);
-  box-shadow: inset 0 0 14px rgba(0, 0, 0, 0.45), 0 8px 16px rgba(0, 0, 0, 0.4);
+  background: radial-gradient(circle at 50% 20%, rgba(255, 255, 255, 0.1), rgba(0, 0, 0, 0.4));
 }
-.table-prev::before,
-.table-prev::after {
-  content: '';
-  position: absolute;
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: #0a0a0a;
-  top: 24px;
-  left: calc(11% + 2px);
-  box-shadow: 0 54px 0 #0a0a0a;
-  z-index: 1;
+.item.locked .preview { opacity: 0.7; }
+.table-prev i {
+  position: relative;
+  width: 80%;
+  height: 64%;
+  border: 8px solid transparent; /* el marco se pinta con la madera */
+  border-radius: 9px;
+  background:
+    radial-gradient(circle, #050505 60%, transparent 64%) 0 0 / 9px 9px no-repeat padding-box,
+    radial-gradient(circle, #050505 60%, transparent 64%) 100% 0 / 9px 9px no-repeat padding-box,
+    radial-gradient(circle, #050505 60%, transparent 64%) 0 100% / 9px 9px no-repeat padding-box,
+    radial-gradient(circle, #050505 60%, transparent 64%) 100% 100% / 9px 9px no-repeat padding-box,
+    radial-gradient(circle, #050505 60%, transparent 64%) 50% 0 / 9px 9px no-repeat padding-box,
+    radial-gradient(circle, #050505 60%, transparent 64%) 50% 100% / 9px 9px no-repeat padding-box,
+    radial-gradient(ellipse at 50% 40%, rgba(255, 255, 255, 0.16), rgba(0, 0, 0, 0.22)) padding-box,
+    linear-gradient(var(--felt), var(--felt)) padding-box,
+    var(--wood) border-box;
+  box-shadow: 0 8px 14px rgba(0, 0, 0, 0.45);
 }
-.table-prev::after { left: auto; right: calc(11% + 2px); }
+.cue-prev { filter: drop-shadow(0 6px 5px rgba(0, 0, 0, 0.5)); }
 .cue-prev i {
-  width: 88%;
-  height: 8px;
-  border-radius: 999px;
-  background: linear-gradient(90deg, #f3f1ea 0 5%, var(--c1) 5% 12%, var(--c2) 12% 88%, #1a1a1a 88%);
+  width: 90%;
+  height: 11px;
+  /* Suela, virola, eje, unión, antebrazo, empuñadura de lino, culata y contera */
+  background: linear-gradient(90deg, #3f7fd4 0 1.5%, #f1ead9 1.5% 4%, var(--c1) 4% 48%, #c9ccd1 48% 49.5%, var(--c2) 49.5% 64%, #15171b 64% 86%, var(--c2) 86% 98%, #0d0d0e 98%);
+  clip-path: polygon(0 28%, 100% 0, 100% 100%, 0 72%);
   transform: rotate(-14deg);
-  box-shadow: 0 6px 10px rgba(0, 0, 0, 0.45);
-}
-
-/* Bloqueado */
-.item.locked .preview > i { filter: grayscale(0.85) brightness(0.55); }
-.item.locked .preview::before,
-.item.locked .preview::after { filter: grayscale(1); }
-.item.locked .preview {
-  background:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-opacity='.85' stroke-width='1.8' stroke-linejoin='round'%3E%3Cpath d='M7 11V8a5 5 0 0 1 10 0v3M6 11h12v9H6z'/%3E%3C/svg%3E")
-      center / 34px no-repeat,
-    radial-gradient(circle at 50% 30%, rgba(255, 255, 255, 0.05), rgba(0, 0, 0, 0.5));
-}
-.item.locked .preview > i { opacity: 0.35; }
-.item.locked h3 { opacity: 0.75; }
-.item.locked .badge { color: rgba(255, 255, 255, 0.7); }
-
-/* Mesas con la textura real de madera */
-button.item {
-  font: inherit;
-  color: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-button.item:disabled { cursor: not-allowed; }
-button.item:disabled:hover { transform: none; }
-
-.table-prev.wood-prev i {
-  border: 7px solid transparent; /* el marco de madera se pinta con la textura */
-  background:
-    linear-gradient(#1d3f7a, #1d3f7a) padding-box,
-    var(--img) center / cover border-box;
 }
 
 @media (max-width: 600px) {
-  .custom-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
-  .item { padding: 9px; }
-  .item .preview { height: 84px; }
-  .item h3 { font-size: 14px; }
+  /* Abajo, como el panel de inicio: la mesa queda a la vista por encima */
+  #custom { place-items: end stretch; padding: 12px; }
+  #custom .sheet { width: 100%; max-height: 58dvh; }
+  .item .preview { height: 76px; }
 }
