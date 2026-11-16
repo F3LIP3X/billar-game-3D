@@ -24,7 +24,7 @@ jobs:
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
-          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BILLAR_3D_F3LIP3X }}
           projectId: billar-3d-f3lip3x
           # live only on push to main; PRs get a temporary preview URL
           channelId: ${{ github.event_name == 'push' && 'live' || '' }}
