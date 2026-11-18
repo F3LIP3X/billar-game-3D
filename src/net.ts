@@ -153,12 +153,13 @@ export class RoomError extends Error {
 export async function joinRoom(rawCode: string, name: string, ev: NetEvents): Promise<Net> {
   const code = normalizeCode(rawCode);
   const { db, uid } = await connect();
-  const room = (await get(ref(db, `rooms/${code}`))).val();
-  if (!room?.host) throw new RoomError('missing');
+  // Only seats are readable before sitting; seat 0 is always the host
+  const seats = (await get(ref(db, `rooms/${code}/seats`))).val();
+  if (!seats?.[0]) throw new RoomError('missing');
   // Si ya eras uno de los jugadores (recarga de la página), recuperas tu sitio
-  let seat: 0 | 1 | null = room.seats?.[0] === uid ? 0 : room.seats?.[1] === uid ? 1 : null;
+  let seat: 0 | 1 | null = seats[0] === uid ? 0 : seats[1] === uid ? 1 : null;
   if (seat === null) {
-    if (room.seats?.[1]) throw new RoomError('full');
+    if (seats[1]) throw new RoomError('full');
     try {
       await set(ref(db, `rooms/${code}/seats/1`), uid);
     } catch {
@@ -167,7 +168,7 @@ export async function joinRoom(rawCode: string, name: string, ev: NetEvents): Pr
     seat = 1;
   }
   await set(ref(db, `rooms/${code}/names/${seat}`), cleanName(name));
-  return open(db, code, seat, room.host === uid, ev);
+  return open(db, code, seat, seats[0] === uid, ev);
 }
 
 function open(db: Database, code: string, seat: 0 | 1, isHost: boolean, ev: NetEvents): Net {
@@ -197,7 +198,7 @@ function open(db: Database, code: string, seat: 0 | 1, isHost: boolean, ev: NetE
       ev.onNames([room.names?.[0] ?? '', room.names?.[1] ?? '']);
       ev.onPresence([room.presence?.[0] === true, room.presence?.[1] === true]);
       ev.onRematch([room.rematch?.[0] === true, room.rematch?.[1] === true]);
-    }),
+    }, () => !closed && ev.onClosed()), // read revoked once the room is gone
   );
   unsubs.push(onValue(ref(db, `${base}/state`), (s) => s.exists() && ev.onState(s.val() as StateMsg)));
   unsubs.push(
